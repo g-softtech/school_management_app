@@ -1,4 +1,5 @@
 // Load environment variables FIRST — before any other module reads process.env
+
 require('dotenv').config();
 
 const app = require('./app');
