@@ -1,0 +1,90 @@
+const jwt    = require('jsonwebtoken');
+const Result = require('../../models/Result');
+const Student= require('../../models/Student');
+const ApiError   = require('../../utils/ApiError');
+const catchAsync = require('../../utils/catchAsync');
+
+// POST /api/results/share-token — generates a shareable token
+// Student or Admin
+exports.generateShareToken = catchAsync(async function(req, res, next) {
+  var studentId = req.body.studentId;
+  var term      = req.body.term;
+  var session   = req.body.session;
+
+  if (!studentId || !term || !session) {
+    return next(new ApiError(400, 'Please provide studentId, term and session'));
+  }
+
+  // Students can only share their own results
+  if (req.user.role === 'student') {
+    var own = await Student.findOne({ userId: req.user._id });
+    if (!own || String(own._id) !== String(studentId)) {
+      return next(new ApiError(403, 'You can only share your own results'));
+    }
+  }
+
+  // Sign a JWT that expires in 24 hours
+  var token = jwt.sign(
+    { studentId, term, session },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+
+  var shareUrl = (process.env.CLIENT_URL || 'http://localhost:3000') + '/results/shared/' + token;
+
+  res.status(200).json({
+    success:  true,
+    message:  'Shareable link generated. Valid for 24 hours.',
+    shareUrl: shareUrl,
+    token:    token,
+    expiresIn: '24 hours',
+  });
+});
+
+// GET /api/results/share/:token — public, no auth required
+exports.viewSharedResult = catchAsync(async function(req, res, next) {
+  var token = req.params.token;
+
+  var decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    return next(new ApiError(401, 'This result link has expired or is invalid'));
+  }
+
+  var student = await Student.findById(decoded.studentId)
+    .populate('userId',  'name')
+    .populate('classId', 'name section');
+
+  if (!student) return next(new ApiError(404, 'Student not found'));
+
+  var results = await Result.find({ studentId: decoded.studentId, term: decoded.term, session: decoded.session })
+    .populate('subjectId', 'name code')
+    .sort({ createdAt: 1 });
+
+  var totalScore = 0;
+  var passCount  = 0;
+  results.forEach(function(r) {
+    totalScore += r.total;
+    if (['A1','B2','B3','C4','C5','C6'].includes(r.grade)) passCount++;
+  });
+
+  res.status(200).json({
+    success: true,
+    student: {
+      name:            student.userId ? student.userId.name : 'N/A',
+      admissionNumber: student.admissionNumber,
+      class:           student.classId ? student.classId.name + (student.classId.section ? ' ' + student.classId.section : '') : 'N/A',
+    },
+    term:    decoded.term,
+    session: decoded.session,
+    summary: {
+      totalSubjects: results.length,
+      totalScore,
+      average: results.length > 0 ? Number((totalScore / results.length).toFixed(1)) : 0,
+      passed:  passCount,
+      failed:  results.length - passCount,
+    },
+    results: results,
+  });
+});
