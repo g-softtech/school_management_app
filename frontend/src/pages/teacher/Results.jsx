@@ -1,0 +1,9 @@
+function Results() {
+  return (
+    <div className="p-5 text-xl font-semibold">
+      Teacher Results – Coming in Phase 6 ??
+    </div>
+  );
+}
+
+export default Results;

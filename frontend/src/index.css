@@ -1,38 +1,104 @@
-export const formatDate = (date) => {
-  if (!date) return 'N/A';
-  return new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-};
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-export const formatDateTime = (date) => {
-  if (!date) return 'N/A';
-  return new Date(date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-};
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-export const formatCurrency = (amount) => {
-  if (amount === null || amount === undefined) return '₦0';
-  return '₦' + Number(amount).toLocaleString('en-NG');
-};
+@layer base {
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: #F9FAFB;
+    color: #1F2937;
+    -webkit-font-smoothing: antialiased;
+  }
+}
 
-export const getInitials = (name) => {
-  if (!name) return '?';
-  return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
-};
+@layer components {
+  /* Buttons */
+  .btn-primary {
+    @apply bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white font-medium py-2 px-5 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2;
+  }
+  .btn-secondary {
+    @apply bg-white hover:bg-secondary-50 text-secondary-800 font-medium py-2 px-5 rounded-xl border border-secondary-200 transition-all duration-200 shadow-sm disabled:opacity-50 inline-flex items-center gap-2;
+  }
+  .btn-danger {
+    @apply bg-danger hover:bg-red-600 text-white font-medium py-2 px-5 rounded-xl transition-all duration-200 shadow-sm inline-flex items-center gap-2;
+  }
+  .btn-ghost {
+    @apply hover:bg-secondary-100 text-secondary-600 hover:text-secondary-800 font-medium py-2 px-4 rounded-xl transition-all duration-200 inline-flex items-center gap-2;
+  }
 
-export const capitalize = (str) => {
-  if (!str) return '';
-  return str.charAt(0).toUpperCase() + str.slice(1);
-};
+  /* Inputs */
+  .input-field {
+    @apply w-full px-4 py-2.5 bg-white border border-secondary-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent text-sm text-secondary-800 placeholder-secondary-400 transition-all duration-200;
+  }
+  .input-label {
+    @apply block text-sm font-medium text-secondary-700 mb-1.5;
+  }
 
-export const getErrorMessage = (error) => {
-  return error?.response?.data?.message || error?.message || 'Something went wrong';
-};
+  /* Cards */
+  .card {
+    @apply bg-white rounded-2xl shadow-card border border-secondary-100 p-6;
+  }
+  .card-md {
+    @apply bg-white rounded-2xl shadow-card-md border border-secondary-100 p-6;
+  }
 
-export const truncate = (str, len = 60) => {
-  if (!str) return '';
-  return str.length > len ? str.slice(0, len) + '...' : str;
-};
+  /* Stat cards */
+  .stat-card {
+    @apply bg-white rounded-2xl shadow-card border border-secondary-100 p-5 flex items-center gap-4;
+  }
 
-export const isOverdue = (dueDate) => {
-  if (!dueDate) return false;
-  return new Date() > new Date(dueDate);
-};
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-success { @apply badge bg-green-100 text-green-800; }
+  .badge-danger  { @apply badge bg-red-100  text-red-800;   }
+  .badge-warning { @apply badge bg-yellow-100 text-yellow-800; }
+  .badge-info    { @apply badge bg-blue-100  text-blue-800;  }
+  .badge-gold    { @apply badge bg-primary-100 text-primary-800; }
+
+  /* Table */
+  .table-wrapper { @apply overflow-x-auto rounded-2xl border border-secondary-100 shadow-card; }
+  .table-base    { @apply w-full text-sm text-secondary-700; }
+  .table-head    { @apply bg-secondary-50 text-secondary-500 text-xs uppercase tracking-wider; }
+  .table-th      { @apply px-5 py-3 text-left font-medium; }
+  .table-td      { @apply px-5 py-4 border-t border-secondary-50; }
+  .table-row     { @apply hover:bg-secondary-50 transition-colors duration-150; }
+
+  /* Sidebar nav */
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer;
+  }
+  .nav-item-active {
+    @apply bg-primary-500 text-white shadow-sm;
+  }
+  .nav-item-inactive {
+    @apply text-secondary-300 hover:bg-secondary-700 hover:text-white;
+  }
+
+  /* Page header */
+  .page-header {
+    @apply mb-6;
+  }
+  .page-title {
+    @apply text-2xl font-semibold text-secondary-800;
+  }
+  .page-subtitle {
+    @apply text-sm text-secondary-500 mt-1;
+  }
+
+  /* Section */
+  .section-title {
+    @apply text-base font-semibold text-secondary-700 mb-4;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }

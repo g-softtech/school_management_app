@@ -1,0 +1,23 @@
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+
+const Spinner = () => (
+  <div className="min-h-screen flex items-center justify-center bg-surface">
+    <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin mx-auto" />
+  </div>
+);
+
+export default function RoleRoute({ allowedRoles }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return <Spinner />;
+
+  // Not logged in — send to login, remember where they came from
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+
+  // Logged in but wrong role
+  if (!allowedRoles.includes(user.role)) return <Navigate to="/unauthorized" replace />;
+
+  return <Outlet />;
+}

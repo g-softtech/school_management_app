@@ -36,6 +36,7 @@ module.exports = {
   GROQ_API_KEY: process.env.GROQ_API_KEY,
 
   // App
-  CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:3000',
+  CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
+  // CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:3000',
   UPLOAD_DIR: process.env.UPLOAD_DIR || 'src/uploads',
 };
