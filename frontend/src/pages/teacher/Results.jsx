@@ -1,129 +1,308 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
-import { FiUpload, FiSearch } from 'react-icons/fi';
-import Table from '../../components/common/Table';
-import Modal from '../../components/common/Modal';
-import Badge from '../../components/common/Badge';
+import { FiAward, FiPlus, FiEdit2, FiTrash2, FiSearch, FiUpload, FiFileText } from 'react-icons/fi';
+import { uploadResult, bulkUpload, updateResult, deleteResult, getClassResults } from '../../services/resultService';
 import api from '../../services/api';
-import { getErrorMessage } from '../../utils/helpers';
+import Modal from '../../components/common/Modal';
 import { TERMS, SESSIONS } from '../../utils/constants';
+import { getErrorMessage } from '../../utils/helpers';
+import { generateClassReportCard } from '../../utils/reportCardHelper';
 
-const GRADE_COLOR = { A1:'success', B2:'success', B3:'success', C4:'info', C5:'info', C6:'info', D7:'warning', E8:'warning', F9:'danger' };
+const GRADES = [
+  { range: [75, 100], grade: 'A1', remark: 'Excellent' },
+  { range: [70, 74],  grade: 'B2', remark: 'Very Good' },
+  { range: [65, 69],  grade: 'B3', remark: 'Good' },
+  { range: [60, 64],  grade: 'C4', remark: 'Credit' },
+  { range: [55, 59],  grade: 'C5', remark: 'Credit' },
+  { range: [50, 54],  grade: 'C6', remark: 'Credit' },
+  { range: [45, 49],  grade: 'D7', remark: 'Pass' },
+  { range: [40, 44],  grade: 'E8', remark: 'Pass' },
+  { range: [0, 39],   grade: 'F9', remark: 'Fail' },
+];
+const computeGrade = (total) => GRADES.find((g) => total >= g.range[0] && total <= g.range[1]) || GRADES[8];
+
+const GRADE_BG = {
+  A1:'bg-green-100 text-green-700', B2:'bg-green-100 text-green-700', B3:'bg-green-100 text-green-700',
+  C4:'bg-blue-100 text-blue-700',   C5:'bg-blue-100 text-blue-700',   C6:'bg-blue-100 text-blue-700',
+  D7:'bg-amber-100 text-amber-700', E8:'bg-amber-100 text-amber-700',
+  F9:'bg-red-100 text-red-600',
+};
+
+const EMPTY_FORM = { studentId: '', subjectId: '', classId: '', ca: '', exam: '', term: 'first', session: '2025/2026' };
 
 export default function TeacherResults() {
+  const [results, setResults]     = useState([]);
+  const [classes, setClasses]     = useState([]);
   const [subjects, setSubjects]   = useState([]);
   const [students, setStudents]   = useState([]);
-  const [results, setResults]     = useState([]);
   const [loading, setLoading]     = useState(false);
-  const [classId, setClassId]     = useState('');
+  const [saving, setSaving]       = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editResult, setEditResult] = useState(null);
+  const [form, setForm]           = useState(EMPTY_FORM);
+  const [classFilter, setClassFilter] = useState('');
   const [term, setTerm]           = useState('first');
   const [session, setSession]     = useState('2025/2026');
-  const [showModal, setShowModal] = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [form, setForm] = useState({ studentId: '', subjectId: '', classId: '', ca: '', exam: '', term: 'first', session: '2025/2026' });
+  const [search, setSearch]       = useState('');
+  const [bulkFile, setBulkFile]   = useState(null);
+  const [uploadingBulk, setUploadingBulk] = useState(false);
 
   useEffect(() => {
-    api.get('/subjects', { params: { limit: 50 } }).then((r) => setSubjects(r.data.data)).catch(() => {});
+    Promise.allSettled([
+      api.get('/classes', { params: { limit: 100 } }),
+      api.get('/subjects', { params: { limit: 100 } }),
+    ]).then(([clRes, subRes]) => {
+      if (clRes.status  === 'fulfilled') setClasses(clRes.value.data.data || []);
+      if (subRes.status === 'fulfilled') setSubjects(subRes.value.data.data || []);
+    });
   }, []);
 
-  const classMap = {};
-  subjects.forEach((s) => { if (s.classId) classMap[s.classId._id] = s.classId; });
-  const myClasses = Object.values(classMap);
-  const filteredSubjects = classId ? subjects.filter(s => s.classId?._id === classId) : subjects;
-
-  const handleSearch = async () => {
-    if (!classId) { toast.error('Please select a class'); return; }
+  const fetchResults = useCallback(async () => {
+    if (!classFilter) { setResults([]); return; }
     setLoading(true);
     try {
-      const [rr, sr] = await Promise.all([
-        api.get(`/results/class/${classId}`, { params: { term, session } }),
-        api.get(`/classes/${classId}/students`),
-      ]);
-      setResults(rr.data.data);
-      setStudents(sr.data.data);
+      const res = await getClassResults(classFilter, { term, session, limit: 200 });
+      setResults(res.data.data || []);
     } catch (err) { toast.error(getErrorMessage(err)); }
     finally { setLoading(false); }
-  };
+  }, [classFilter, term, session]);
 
-  const openUpload = () => {
-    setForm(f => ({ ...f, classId, term, session }));
+  useEffect(() => { fetchResults(); }, [fetchResults]);
+
+  useEffect(() => {
+    if (!form.classId) return;
+    api.get('/students', { params: { classId: form.classId, limit: 200 } })
+      .then((r) => setStudents(r.data.data || []))
+      .catch(() => {});
+  }, [form.classId]);
+
+  const openCreate = () => { setEditResult(null); setForm({ ...EMPTY_FORM, classId: classFilter, term, session }); setShowModal(true); };
+  const openEdit = (r) => {
+    setEditResult(r);
+    setForm({ studentId: r.studentId?._id || r.studentId, subjectId: r.subjectId?._id || r.subjectId,
+      classId: r.classId?._id || r.classId, ca: r.ca, exam: r.exam, term: r.term, session: r.session });
     setShowModal(true);
   };
 
-  const handleUpload = async (e) => {
-    e.preventDefault(); setSaving(true);
+  const handleSave = async () => {
+    if (!form.studentId || !form.subjectId || !form.classId || !form.ca || !form.exam) {
+      toast.error('Please fill in all required fields'); return;
+    }
+    const ca = Number(form.ca), exam = Number(form.exam);
+    if (ca > 40)  { toast.error('CA score cannot exceed 40'); return; }
+    if (exam > 60) { toast.error('Exam score cannot exceed 60'); return; }
+    setSaving(true);
     try {
-      await api.post('/results', { ...form, ca: Number(form.ca), exam: Number(form.exam) });
-      toast.success('Result uploaded'); setShowModal(false); handleSearch();
+      const payload = { ...form, ca, exam };
+      if (editResult) { await updateResult(editResult._id, payload); toast.success('Result updated!'); }
+      else { await uploadResult(payload); toast.success('Result uploaded!'); }
+      setShowModal(false);
+      fetchResults();
     } catch (err) { toast.error(getErrorMessage(err)); }
     finally { setSaving(false); }
   };
 
-  const columns = [
-    { key: 'admissionNumber', label: 'Adm. No' },
-    { key: 'subjects', label: 'Subjects', render: (v) => <Badge variant="info">{v?.length ?? 0}</Badge> },
-    { key: 'average',  label: 'Average',  render: (v) => <span className="font-semibold">{v}</span> },
-    { key: 'position', label: 'Position', render: (v) => v ? `${v}${[,'st','nd','rd'][v] || 'th'}` : '—' },
-    { key: 'passCount', label: 'Passed', render: (v, row) => <Badge variant="success">{v}/{row.subjects?.length}</Badge> },
-  ];
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this result?')) return;
+    try { await deleteResult(id); toast.success('Deleted'); fetchResults(); }
+    catch (err) { toast.error(getErrorMessage(err)); }
+  };
+
+  const handleBulkUpload = async () => {
+    if (!bulkFile) { toast.error('Select a CSV file'); return; }
+    if (!classFilter || !term || !session) { toast.error('Please select class, term and session first'); return; }
+    setUploadingBulk(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', bulkFile);
+      fd.append('classId', classFilter);
+      fd.append('term', term);
+      fd.append('session', session);
+      await bulkUpload(fd);
+      toast.success('Bulk upload successful!');
+      setBulkFile(null);
+      fetchResults();
+    } catch (err) { toast.error(getErrorMessage(err)); }
+    finally { setUploadingBulk(false); }
+  };
+
+  const previewTotal = () => {
+    const ca = Number(form.ca) || 0;
+    const exam = Number(form.exam) || 0;
+    const total = ca + exam;
+    return total > 0 ? { total, ...computeGrade(total) } : null;
+  };
+
+  const preview = previewTotal();
+
+  const filtered = results.filter((r) =>
+    !search || r.studentId?.userId?.name?.toLowerCase().includes(search.toLowerCase()) || r.subjectId?.name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const fc = (e) => setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div><h1 className="page-title">Results</h1><p className="page-subtitle">Upload and view class results</p></div>
-        <button onClick={openUpload} disabled={!classId} className="btn-primary"><FiUpload size={16} />Upload Result</button>
-      </div>
-
-      <div className="card p-4">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div><label className="input-label">Class *</label>
-            <select className="input-field py-1.5 text-sm w-40" value={classId} onChange={(e) => setClassId(e.target.value)}>
-              <option value="">— Select Class —</option>
-              {myClasses.map((c) => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
-            </select>
-          </div>
-          <div><label className="input-label">Term</label>
-            <select className="input-field py-1.5 text-sm w-32" value={term} onChange={(e) => setTerm(e.target.value)}>
-              {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div><label className="input-label">Session</label>
-            <select className="input-field py-1.5 text-sm w-32" value={session} onChange={(e) => setSession(e.target.value)}>
-              {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <button onClick={handleSearch} className="btn-primary py-2"><FiSearch size={15} />Search</button>
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div><h1 className="page-title">Results</h1><p className="page-subtitle">Upload and manage student results</p></div>
+        <div className="flex gap-2">
+          <label className="btn-secondary text-sm flex items-center gap-2 cursor-pointer">
+            <FiUpload size={14} /> {bulkFile ? bulkFile.name.slice(0, 12) + '…' : 'Bulk CSV'}
+            <input type="file" accept=".csv" className="hidden" onChange={(e) => setBulkFile(e.target.files[0])} />
+          </label>
+          {bulkFile && (
+            <button onClick={handleBulkUpload} disabled={uploadingBulk} className="btn-secondary text-sm">
+              {uploadingBulk ? 'Uploading…' : 'Upload CSV'}
+            </button>
+          )}
+          <button onClick={openCreate} disabled={!classFilter} className="btn-primary flex items-center gap-2 text-sm">
+            <FiPlus size={15} /> Add Result
+          </button>
+          {results.length > 0 && (
+            <button
+              onClick={() => {
+                const byStudent = results.reduce((acc, r) => {
+                  const sid   = r.studentId?._id || r.studentId;
+                  const name  = r.studentId?.userId?.name || 'Unknown';
+                  const admNo = r.studentId?.admissionNumber || '';
+                  if (!acc[sid]) acc[sid] = { name, admissionNumber: admNo, results: [] };
+                  acc[sid].results.push({
+                    subjectName: r.subjectId?.name,
+                    ca: r.ca, exam: r.exam, total: r.total, grade: r.grade, remark: r.remark,
+                  });
+                  return acc;
+                }, {});
+                const cls = classes.find((c) => c._id === classFilter);
+                generateClassReportCard({
+                  className: cls ? `${cls.name} ${cls.section || ''}`.trim() : 'Class',
+                  students:  Object.values(byStudent),
+                  term,
+                  session,
+                });
+              }}
+              className="btn-secondary flex items-center gap-2 text-sm"
+            >
+              <FiFileText size={14} /> Report Cards
+            </button>
+          )}
         </div>
       </div>
 
-      {results.length > 0
-        ? <Table columns={columns} data={results} loading={loading} emptyMessage="No results found" />
-        : <div className="card text-center py-12 text-secondary-400 text-sm">Select a class and click Search to view results.</div>
-      }
+      {/* Filters */}
+      <div className="card p-4 flex flex-wrap gap-3">
+        <select value={classFilter} onChange={(e) => { setClassFilter(e.target.value); setPage?.(1); }} className="input-field py-1.5 text-sm w-40">
+          <option value="">Select class…</option>
+          {classes.map((c) => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
+        </select>
+        <select value={term} onChange={(e) => setTerm(e.target.value)} className="input-field py-1.5 text-sm w-32">
+          {TERMS.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)} Term</option>)}
+        </select>
+        <select value={session} onChange={(e) => setSession(e.target.value)} className="input-field py-1.5 text-sm w-32">
+          {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        {classFilter && (
+          <div className="relative flex-1 min-w-48">
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search student or subject…" className="input-field pl-9 py-1.5 text-sm w-full" />
+          </div>
+        )}
+      </div>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Upload Result">
-        <form onSubmit={handleUpload} className="space-y-4">
-          <div><label className="input-label">Student *</label>
-            <select className="input-field" value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })} required>
-              <option value="">— Select Student —</option>
-              {students.map((s) => <option key={s._id} value={s._id}>{s.userId?.name} ({s.admissionNumber})</option>)}
-            </select>
-          </div>
-          <div><label className="input-label">Subject *</label>
-            <select className="input-field" value={form.subjectId} onChange={(e) => setForm({ ...form, subjectId: e.target.value })} required>
-              <option value="">— Select Subject —</option>
-              {filteredSubjects.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
-            </select>
-          </div>
+      {!classFilter ? (
+        <div className="card text-center py-16 text-secondary-400"><FiAward size={32} className="mx-auto mb-3 opacity-40" /><p>Select a class to view results</p></div>
+      ) : (
+        <div className="card overflow-hidden p-0">
+          {loading ? (
+            <div className="p-6 space-y-3">{[...Array(6)].map((_, i) => <div key={i} className="h-12 bg-secondary-50 rounded-xl animate-pulse" />)}</div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-14 text-secondary-400"><FiAward size={32} className="mx-auto mb-3 opacity-40" /><p>No results found</p></div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead><tr className="bg-secondary-50">
+                {['Student', 'Subject', 'CA (40)', 'Exam (60)', 'Total', 'Grade', 'Remark', ''].map((h) => (
+                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
+                ))}
+              </tr></thead>
+              <tbody className="divide-y divide-secondary-50">
+                {filtered.map((r) => (
+                  <tr key={r._id} className="hover:bg-secondary-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-secondary-800">{r.studentId?.userId?.name || '—'}</td>
+                    <td className="px-4 py-3 text-secondary-600">{r.subjectId?.name || '—'}</td>
+                    <td className="px-4 py-3 text-center text-secondary-600">{r.ca}</td>
+                    <td className="px-4 py-3 text-center text-secondary-600">{r.exam}</td>
+                    <td className="px-4 py-3 text-center font-bold text-secondary-800">{r.total}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${GRADE_BG[r.grade] || 'bg-secondary-100 text-secondary-600'}`}>{r.grade}</span>
+                    </td>
+                    <td className={`px-4 py-3 text-sm ${['A1','B2','B3','C4','C5','C6'].includes(r.grade) ? 'text-green-700' : 'text-red-600'}`}>{r.remark}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openEdit(r)} className="p-1.5 hover:bg-secondary-100 rounded-lg transition-colors"><FiEdit2 size={14} className="text-secondary-500" /></button>
+                        <button onClick={() => handleDelete(r._id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"><FiTrash2 size={14} className="text-red-400" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editResult ? 'Edit Result' : 'Add Result'} size="md">
+        <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="input-label">CA (0–40) *</label><input type="number" min="0" max="40" className="input-field" value={form.ca} onChange={(e) => setForm({ ...form, ca: e.target.value })} required /></div>
-            <div><label className="input-label">Exam (0–60) *</label><input type="number" min="0" max="60" className="input-field" value={form.exam} onChange={(e) => setForm({ ...form, exam: e.target.value })} required /></div>
+            <div>
+              <label className="input-label">Class <span className="text-red-500">*</span></label>
+              <select name="classId" value={form.classId} onChange={fc} className="input-field">
+                <option value="">Select…</option>
+                {classes.map((c) => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="input-label">Student <span className="text-red-500">*</span></label>
+              <select name="studentId" value={form.studentId} onChange={fc} className="input-field" disabled={!form.classId}>
+                <option value="">Select…</option>
+                {students.map((s) => <option key={s._id} value={s._id}>{s.userId?.name} ({s.admissionNumber})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="input-label">Subject <span className="text-red-500">*</span></label>
+              <select name="subjectId" value={form.subjectId} onChange={fc} className="input-field">
+                <option value="">Select…</option>
+                {subjects.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="input-label">Term</label>
+              <select name="term" value={form.term} onChange={fc} className="input-field capitalize">
+                {TERMS.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)} Term</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="input-label">CA Score (max 40) <span className="text-red-500">*</span></label>
+              <input name="ca" type="number" min="0" max="40" value={form.ca} onChange={fc} placeholder="0–40" className="input-field" />
+            </div>
+            <div>
+              <label className="input-label">Exam Score (max 60) <span className="text-red-500">*</span></label>
+              <input name="exam" type="number" min="0" max="60" value={form.exam} onChange={fc} placeholder="0–60" className="input-field" />
+            </div>
           </div>
-          <div className="flex gap-3 justify-end pt-2">
-            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
-            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Uploading...' : 'Upload'}</button>
+
+          {preview && (
+            <div className="flex items-center gap-3 p-3 bg-secondary-50 rounded-xl">
+              <div><p className="text-xs text-secondary-500">Total</p><p className="text-xl font-bold text-secondary-800">{preview.total}</p></div>
+              <div><p className="text-xs text-secondary-500">Grade</p><span className={`text-sm font-bold px-2 py-0.5 rounded-full ${GRADE_BG[preview.grade]}`}>{preview.grade}</span></div>
+              <div><p className="text-xs text-secondary-500">Remark</p><p className="text-sm font-medium text-secondary-700">{preview.remark}</p></div>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
+            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1">{saving ? 'Saving…' : editResult ? 'Update' : 'Upload'}</button>
           </div>
-        </form>
+        </div>
       </Modal>
     </div>
   );

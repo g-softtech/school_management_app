@@ -4,7 +4,7 @@ import {
   FiBookOpen, FiHome, FiUsers, FiBook, FiClipboard,
   FiBarChart2, FiCreditCard, FiMessageSquare,
   FiCalendar, FiFileText, FiAward, FiLogOut, FiCpu,
-  FiActivity, FiList, FiUserCheck,
+  FiActivity, FiList, FiUserCheck,FiDownload,
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { logoutUser } from '../../services/authService';
@@ -39,6 +39,7 @@ const NAV_ITEMS = {
     { to: '/student/lesson-notes',  icon: FiFileText,      label: 'Lesson Notes' },
     { to: '/student/assignments',   icon: FiClipboard,     label: 'Assignments' },
     { to: '/student/analytics',     icon: FiActivity,      label: 'My Progress' },
+    { to: '/student/downloads',     icon: FiDownload,      label: 'Downloads' },
     { to: '/student/messages',      icon: FiMessageSquare, label: 'Messages' },
   ],
   parent: [

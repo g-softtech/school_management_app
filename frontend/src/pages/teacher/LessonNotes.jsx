@@ -1,165 +1,367 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
-import { FiPlus, FiEdit2, FiTrash2, FiFileText } from 'react-icons/fi';
-import Modal from '../../components/common/Modal';
-import Badge from '../../components/common/Badge';
-import ConfirmDialog from '../../components/common/ConfirmDialog';
+import { FiFileText, FiPlus, FiEdit2, FiTrash2, FiSearch, FiEye, FiEyeOff } from 'react-icons/fi';
 import api from '../../services/api';
-import { formatDate, getErrorMessage, truncate } from '../../utils/helpers';
+import Modal from '../../components/common/Modal';
+import FileUpload from '../../components/common/FileUpload';
+import FilePreview from '../../components/common/FilePreview';
 import { TERMS, SESSIONS } from '../../utils/constants';
+import { formatDate, getErrorMessage } from '../../utils/helpers';
 
-const EMPTY = { classId: '', subjectId: '', topic: '', week: 1, term: 'first', session: '2025/2026', content: '' };
+const EMPTY_FORM = { classId: '', subjectId: '', topic: '', week: '', term: 'first', session: '2025/2026', content: '', isPublished: true };
 
 export default function TeacherLessonNotes() {
   const [notes, setNotes]         = useState([]);
+  const [classes, setClasses]     = useState([]);
   const [subjects, setSubjects]   = useState([]);
+  const [filteredSubjects, setFilteredSubjects] = useState([]);
   const [loading, setLoading]     = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [editing, setEditing]     = useState(null);
-  const [deleting, setDeleting]   = useState(null);
   const [saving, setSaving]       = useState(false);
-  const [form, setForm]           = useState(EMPTY);
-  const [filterTerm, setFilterTerm] = useState('');
+  const [deleting, setDeleting]   = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showView, setShowView]   = useState(false);
+  const [editNote, setEditNote]   = useState(null);
+  const [viewNote, setViewNote]   = useState(null);
+  const [form, setForm]           = useState(EMPTY_FORM);
+  const [file, setFile]           = useState(null);
+  const [search, setSearch]       = useState('');
+  const [term, setTerm]           = useState('');
+  const [session, setSession]     = useState('2025/2026');
+  const [pagination, setPagination] = useState({});
+  const [page, setPage]           = useState(1);
 
-  const subjectMap = {};
-  subjects.forEach((s) => { subjectMap[s._id] = s; });
-
-  const fetchAll = useCallback(async () => {
+  const fetchNotes = useCallback(async () => {
     setLoading(true);
     try {
-      const [nr, sr] = await Promise.all([
-        api.get('/lesson-notes', { params: { limit: 50, term: filterTerm || undefined } }),
-        api.get('/subjects', { params: { limit: 50 } }),
-      ]);
-      setNotes(nr.data.data);
-      setSubjects(sr.data.data);
+      const res = await api.get('/lesson-notes', {
+        params: { term: term || undefined, session, page, limit: 10 },
+      });
+      setNotes(res.data.data || []);
+      setPagination(res.data.pagination || {});
     } catch (err) { toast.error(getErrorMessage(err)); }
     finally { setLoading(false); }
-  }, [filterTerm]);
+  }, [term, session, page]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => { fetchNotes(); }, [fetchNotes]);
 
-  const classesFromSubjects = [...new Map(subjects.filter(s => s.classId).map(s => [s.classId._id, s.classId])).values()];
-  const filteredSubjects = form.classId ? subjects.filter(s => s.classId?._id === form.classId) : subjects;
+  useEffect(() => {
+    async function loadMeta() {
+      const [clRes, subRes] = await Promise.allSettled([
+        api.get('/classes',  { params: { limit: 100 } }),
+        api.get('/subjects', { params: { limit: 200 } }),
+      ]);
+      if (clRes.status  === 'fulfilled') setClasses(clRes.value.data.data || []);
+      if (subRes.status === 'fulfilled') setSubjects(subRes.value.data.data || []);
+    }
+    loadMeta();
+  }, []);
 
-  const openCreate = () => { setEditing(null); setForm(EMPTY); setShowModal(true); };
-  const openEdit   = (n) => {
-    setEditing(n);
-    setForm({ classId: n.classId?._id || '', subjectId: n.subjectId?._id || '', topic: n.topic, week: n.week, term: n.term, session: n.session, content: n.content || '' });
+  // Filter subjects based on selected class
+  useEffect(() => {
+    if (!form.classId) {
+      setFilteredSubjects(subjects);
+    } else {
+      setFilteredSubjects(subjects.filter((s) => (s.classId?._id || s.classId) === form.classId));
+    }
+  }, [form.classId, subjects]);
+
+  const openCreate = () => {
+    setEditNote(null);
+    setForm(EMPTY_FORM);
+    setFile(null);
     setShowModal(true);
   };
 
-  const handleSave = async (e) => {
-    e.preventDefault(); setSaving(true);
+  const openEdit = (note) => {
+    setEditNote(note);
+    setForm({
+      classId:     note.classId?._id   || note.classId   || '',
+      subjectId:   note.subjectId?._id || note.subjectId || '',
+      topic:       note.topic,
+      week:        note.week,
+      term:        note.term,
+      session:     note.session,
+      content:     note.content || '',
+      isPublished: note.isPublished,
+    });
+    setFile(null);
+    setShowModal(true);
+  };
+
+  const openView = (note) => {
+    setViewNote(note);
+    setShowView(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.classId || !form.subjectId || !form.topic || !form.week || !form.term) {
+      toast.error('Please fill in all required fields'); return;
+    }
+    setSaving(true);
     try {
-      editing
-        ? await api.patch(`/lesson-notes/${editing._id}`, form)
-        : await api.post('/lesson-notes', form);
-      toast.success(editing ? 'Lesson note updated' : 'Lesson note created');
-      setShowModal(false); fetchAll();
+      const fd = new FormData();
+      Object.entries(form).forEach(([k, v]) => fd.append(k, v));
+      if (file) fd.append('file', file);
+
+      if (editNote) {
+        await api.patch(`/lesson-notes/${editNote._id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        toast.success('Lesson note updated!');
+      } else {
+        await api.post('/lesson-notes', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        toast.success('Lesson note created!');
+      }
+      setShowModal(false);
+      fetchNotes();
     } catch (err) { toast.error(getErrorMessage(err)); }
     finally { setSaving(false); }
   };
 
-  const handleDelete = async () => {
-    setSaving(true);
-    try { await api.delete(`/lesson-notes/${deleting._id}`); toast.success('Deleted'); setShowConfirm(false); fetchAll(); }
-    catch (err) { toast.error(getErrorMessage(err)); }
-    finally { setSaving(false); }
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this lesson note?')) return;
+    setDeleting(id);
+    try {
+      await api.delete(`/lesson-notes/${id}`);
+      toast.success('Deleted');
+      fetchNotes();
+    } catch (err) { toast.error(getErrorMessage(err)); }
+    finally { setDeleting(null); }
   };
 
+  const togglePublish = async (note) => {
+    try {
+      await api.patch(`/lesson-notes/${note._id}`, { isPublished: !note.isPublished });
+      toast.success(note.isPublished ? 'Note unpublished' : 'Note published to students');
+      fetchNotes();
+    } catch (err) { toast.error(getErrorMessage(err)); }
+  };
+
+  const filtered = notes.filter((n) =>
+    !search ||
+    n.topic.toLowerCase().includes(search.toLowerCase()) ||
+    n.subjectId?.name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const fc = (e) => setForm((p) => ({
+    ...p,
+    [e.target.name]: e.target.type === 'checkbox' ? e.target.checked : e.target.value,
+  }));
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div><h1 className="page-title">Lesson Notes</h1><p className="page-subtitle">{notes.length} notes</p></div>
-        <div className="flex gap-2">
-          <select className="input-field py-1.5 text-sm w-32" value={filterTerm} onChange={(e) => setFilterTerm(e.target.value)}>
-            <option value="">All Terms</option>
-            {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <button onClick={openCreate} className="btn-primary"><FiPlus size={16} />Add Note</button>
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="page-title">Lesson Notes</h1>
+          <p className="page-subtitle">Create, manage and publish lesson notes to students</p>
         </div>
+        <button onClick={openCreate} className="btn-primary flex items-center gap-2">
+          <FiPlus size={16} /> New Note
+        </button>
       </div>
 
-      {loading ? <div className="py-12 text-center text-secondary-400">Loading...</div> :
-      notes.length === 0 ? (
-        <div className="card text-center py-12">
-          <FiFileText size={36} className="text-secondary-200 mx-auto mb-3" />
-          <p className="text-secondary-400 text-sm">No lesson notes yet. Create your first one.</p>
+      {/* Filters */}
+      <div className="card p-4 flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-48">
+          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search topic or subject…" className="input-field pl-9 py-1.5 text-sm w-full" />
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {notes.map((n) => (
-            <div key={n._id} className="card hover:shadow-card-md transition-shadow">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-secondary-800 truncate">{n.topic}</p>
-                  <p className="text-xs text-secondary-400 mt-0.5">{n.subjectId?.name} · {n.classId?.name} {n.classId?.section}</p>
-                </div>
-                <div className="flex gap-1 ml-2">
-                  <button onClick={() => openEdit(n)} className="p-1.5 rounded-lg hover:bg-secondary-100 text-secondary-400 hover:text-primary-600 transition-colors"><FiEdit2 size={13} /></button>
-                  <button onClick={() => { setDeleting(n); setShowConfirm(true); }} className="p-1.5 rounded-lg hover:bg-red-50 text-secondary-400 hover:text-red-500 transition-colors"><FiTrash2 size={13} /></button>
-                </div>
-              </div>
-              <div className="flex gap-2 mb-2">
-                <Badge variant="gold">Week {n.week}</Badge>
-                <Badge variant="info">{n.term} term</Badge>
-                {!n.isPublished && <Badge variant="warning">Draft</Badge>}
-              </div>
-              {n.content && <p className="text-xs text-secondary-500 leading-relaxed">{truncate(n.content, 100)}</p>}
-              <p className="text-xs text-secondary-300 mt-2">{formatDate(n.createdAt)}</p>
-            </div>
+        <select value={term} onChange={(e) => { setTerm(e.target.value); setPage(1); }} className="input-field py-1.5 text-sm w-32">
+          <option value="">All Terms</option>
+          {TERMS.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)} Term</option>)}
+        </select>
+        <select value={session} onChange={(e) => { setSession(e.target.value); setPage(1); }} className="input-field py-1.5 text-sm w-32">
+          {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {/* Table */}
+      <div className="card overflow-hidden p-0">
+        {loading ? (
+          <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-14 bg-secondary-50 rounded-xl animate-pulse" />)}</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-14 text-secondary-400">
+            <FiFileText size={32} className="mx-auto mb-3 opacity-40" />
+            <p className="font-medium">No lesson notes found</p>
+            <p className="text-xs mt-1">Click "New Note" to create your first lesson note</p>
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-secondary-50">
+                {['Topic','Subject','Class','Week','Term','File','Status','Date',''].map((h) => (
+                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-secondary-50">
+              {filtered.map((n) => (
+                <tr key={n._id} className="hover:bg-secondary-50 transition-colors">
+                  <td className="px-4 py-3 font-medium text-secondary-800 max-w-44 truncate">{n.topic}</td>
+                  <td className="px-4 py-3 text-secondary-600">{n.subjectId?.name || '—'}</td>
+                  <td className="px-4 py-3 text-secondary-600">{n.classId?.name || '—'}</td>
+                  <td className="px-4 py-3 text-center text-secondary-600">{n.week}</td>
+                  <td className="px-4 py-3 capitalize text-secondary-600">{n.term}</td>
+                  <td className="px-4 py-3 text-center">
+                    {n.fileUrl
+                      ? <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">📎 Yes</span>
+                      : <span className="text-xs text-secondary-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${n.isPublished ? 'bg-green-100 text-green-700' : 'bg-secondary-100 text-secondary-500'}`}>
+                      {n.isPublished ? 'Published' : 'Draft'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-secondary-500 text-xs">{formatDate(n.createdAt)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => openView(n)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="View">
+                        <FiFileText size={14} className="text-blue-500" />
+                      </button>
+                      <button onClick={() => togglePublish(n)} className="p-1.5 hover:bg-secondary-100 rounded-lg transition-colors" title={n.isPublished ? 'Unpublish' : 'Publish'}>
+                        {n.isPublished ? <FiEyeOff size={14} className="text-secondary-500" /> : <FiEye size={14} className="text-green-600" />}
+                      </button>
+                      <button onClick={() => openEdit(n)} className="p-1.5 hover:bg-secondary-100 rounded-lg transition-colors">
+                        <FiEdit2 size={14} className="text-secondary-500" />
+                      </button>
+                      <button onClick={() => handleDelete(n._id)} disabled={deleting === n._id} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors">
+                        <FiTrash2 size={14} className="text-red-400" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Pagination */}
+      {pagination.pages > 1 && (
+        <div className="flex justify-center gap-2">
+          {[...Array(pagination.pages)].map((_, i) => (
+            <button key={i} onClick={() => setPage(i + 1)}
+              className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${page === i + 1 ? 'bg-primary-500 text-white' : 'bg-white border border-secondary-200 text-secondary-600 hover:border-primary-300'}`}>
+              {i + 1}
+            </button>
           ))}
         </div>
       )}
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Lesson Note' : 'Create Lesson Note'} size="lg">
-        <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="input-label">Class *</label>
-              <select className="input-field" value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value, subjectId: '' })} required>
-                <option value="">— Select Class —</option>
-                {classesFromSubjects.map((c) => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
+      {/* View Modal */}
+      <Modal isOpen={showView} onClose={() => setShowView(false)} title={viewNote?.topic || 'Lesson Note'} size="lg">
+        {viewNote && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <span className="badge badge-info">{viewNote.subjectId?.name}</span>
+              <span className="badge badge-gray">{viewNote.classId?.name}</span>
+              <span className="badge badge-gray">Week {viewNote.week}</span>
+              <span className="badge badge-gray capitalize">{viewNote.term} Term</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${viewNote.isPublished ? 'bg-green-100 text-green-700' : 'bg-secondary-100 text-secondary-500'}`}>
+                {viewNote.isPublished ? 'Published' : 'Draft'}
+              </span>
+            </div>
+            <p className="text-xs text-secondary-400">{formatDate(viewNote.createdAt)}</p>
+
+            {viewNote.content && (
+              <div className="bg-secondary-50 rounded-xl p-4">
+                <p className="text-xs font-semibold text-secondary-500 uppercase tracking-wide mb-2">Content</p>
+                <p className="text-sm text-secondary-700 whitespace-pre-wrap leading-relaxed">{viewNote.content}</p>
+              </div>
+            )}
+
+            {viewNote.fileUrl && (
+              <div>
+                <p className="text-xs font-semibold text-secondary-500 uppercase tracking-wide mb-2">Attached File</p>
+                <FilePreview fileUrl={viewNote.fileUrl} fileName={viewNote.fileName} size="md" />
+              </div>
+            )}
+
+            {!viewNote.content && !viewNote.fileUrl && (
+              <p className="text-secondary-400 text-sm text-center py-6">No content added yet</p>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Create/Edit Modal */}
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editNote ? 'Edit Lesson Note' : 'New Lesson Note'} size="lg">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="input-label">Class <span className="text-red-500">*</span></label>
+              <select name="classId" value={form.classId} onChange={fc} className="input-field">
+                <option value="">Select class…</option>
+                {classes.map((c) => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
               </select>
             </div>
-            <div><label className="input-label">Subject *</label>
-              <select className="input-field" value={form.subjectId} onChange={(e) => setForm({ ...form, subjectId: e.target.value })} required>
-                <option value="">— Select Subject —</option>
+            <div>
+              <label className="input-label">Subject <span className="text-red-500">*</span></label>
+              <select name="subjectId" value={form.subjectId} onChange={fc} className="input-field">
+                <option value="">Select subject…</option>
                 {filteredSubjects.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
               </select>
+              {form.classId && filteredSubjects.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">No subjects assigned to this class yet</p>
+              )}
             </div>
-            <div className="col-span-2"><label className="input-label">Topic *</label><input className="input-field" value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} required /></div>
-            <div><label className="input-label">Week *</label><input type="number" min="1" max="20" className="input-field" value={form.week} onChange={(e) => setForm({ ...form, week: e.target.value })} required /></div>
-            <div><label className="input-label">Term *</label>
-              <select className="input-field" value={form.term} onChange={(e) => setForm({ ...form, term: e.target.value })}>
-                {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
+            <div className="sm:col-span-2">
+              <label className="input-label">Topic <span className="text-red-500">*</span></label>
+              <input name="topic" value={form.topic} onChange={fc} placeholder="e.g. Photosynthesis in Plants" className="input-field" />
+            </div>
+            <div>
+              <label className="input-label">Week <span className="text-red-500">*</span></label>
+              <input name="week" type="number" min="1" max="14" value={form.week} onChange={fc} placeholder="1 – 14" className="input-field" />
+            </div>
+            <div>
+              <label className="input-label">Term <span className="text-red-500">*</span></label>
+              <select name="term" value={form.term} onChange={fc} className="input-field capitalize">
+                {TERMS.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)} Term</option>)}
               </select>
             </div>
-            <div><label className="input-label">Session</label>
-              <select className="input-field" value={form.session} onChange={(e) => setForm({ ...form, session: e.target.value })}>
+            <div>
+              <label className="input-label">Session</label>
+              <select name="session" value={form.session} onChange={fc} className="input-field">
                 {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-            <div><label className="input-label">Published</label>
-              <select className="input-field" value={form.isPublished} onChange={(e) => setForm({ ...form, isPublished: e.target.value === 'true' })}>
-                <option value="true">Yes — visible to students</option>
-                <option value="false">No — draft</option>
-              </select>
-            </div>
-            <div className="col-span-2"><label className="input-label">Content</label>
-              <textarea rows={5} className="input-field" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="Enter lesson content here..." />
+            <div className="flex items-center gap-3 pt-4">
+              <input type="checkbox" id="pub" name="isPublished" checked={form.isPublished} onChange={fc} className="w-4 h-4 accent-primary-500" />
+              <label htmlFor="pub" className="text-sm text-secondary-700 cursor-pointer">
+                Publish immediately <span className="text-secondary-400">(visible to students)</span>
+              </label>
             </div>
           </div>
-          <div className="flex gap-3 justify-end pt-2">
-            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
-            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Saving...' : editing ? 'Update' : 'Create'}</button>
-          </div>
-        </form>
-      </Modal>
 
-      <ConfirmDialog isOpen={showConfirm} onClose={() => setShowConfirm(false)} onConfirm={handleDelete} loading={saving}
-        title="Delete Lesson Note" message={`Delete "${deleting?.topic}"?`} />
+          <div>
+            <label className="input-label">Content</label>
+            <textarea name="content" value={form.content} onChange={fc} rows={5} placeholder="Write lesson content here. Students will see this in their Lesson Notes page." className="input-field resize-none" />
+          </div>
+
+          {/* File upload using FileUpload component */}
+          <FileUpload
+            value={file}
+            onChange={setFile}
+            label="Attach File (optional)"
+            placeholder="Upload a PDF, Word doc, image or any resource"
+            existingFileName={editNote?.fileName}
+            maxSizeMB={20}
+          />
+
+          {/* Preview existing file if editing */}
+          {editNote?.fileUrl && !file && (
+            <div>
+              <p className="text-xs font-semibold text-secondary-500 uppercase tracking-wide mb-2">Current File</p>
+              <FilePreview fileUrl={editNote.fileUrl} fileName={editNote.fileName} size="sm" />
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
+            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1">
+              {saving ? 'Saving…' : editNote ? 'Save Changes' : 'Create Note'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

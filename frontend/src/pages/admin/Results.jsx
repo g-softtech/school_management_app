@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { FiUpload, FiSearch } from 'react-icons/fi';
+import { FiUpload, FiSearch, FiFileText } from 'react-icons/fi';
 import Table from '../../components/common/Table';
 import Modal from '../../components/common/Modal';
 import Badge from '../../components/common/Badge';
@@ -9,6 +9,7 @@ import { getClasses } from '../../services/classService';
 import { getSubjects } from '../../services/subjectService';
 import { getClassResults, uploadResult } from '../../services/resultService';
 import { getErrorMessage } from '../../utils/helpers';
+import { generateClassReportCard } from '../../utils/reportCardHelper';
 import { TERMS, SESSIONS } from '../../utils/constants';
 
 const GRADE_COLORS = { A1:'success', B2:'success', B3:'success', C4:'info', C5:'info', C6:'info', D7:'warning', E8:'warning', F9:'danger' };
@@ -75,7 +76,34 @@ export default function AdminResults() {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div><h1 className="page-title">Results Management</h1></div>
-        <button onClick={openUpload} className="btn-primary"><FiUpload size={16} />Upload Result</button>
+        <div className="flex gap-2">
+          {results.length > 0 && (
+            <button
+              onClick={() => {
+                const byStudent = results.reduce((acc, r) => {
+                  const sid  = r.studentId?._id || r.studentId;
+                  const name = r.studentId?.userId?.name || 'Unknown';
+                  const admNo = r.studentId?.admissionNumber || '';
+                  if (!acc[sid]) acc[sid] = { name, admissionNumber: admNo, results: [] };
+                  acc[sid].results.push({ subjectName: r.subjectId?.name, ca: r.ca, exam: r.exam, total: r.total, grade: r.grade, remark: r.remark });
+                  return acc;
+                }, {});
+                const cls = classes.find((c) => c._id === classId);
+                generateClassReportCard({
+                  className: cls ? `${cls.name} ${cls.section || ''}`.trim() : 'Class',
+                  students: Object.values(byStudent),
+                  term, session,
+                });
+              }}
+              className="btn-secondary flex items-center gap-2 text-sm"
+            >
+              <FiFileText size={15} /> Report Cards
+            </button>
+          )}
+          <button onClick={openUpload} className="btn-primary flex items-center gap-2 text-sm">
+            <FiUpload size={16} /> Upload Result
+          </button>
+        </div>
       </div>
 
       <div className="card p-4">

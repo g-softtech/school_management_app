@@ -33,10 +33,18 @@ exports.getAllClasses = catchAsync(async function(req, res, next) {
     .skip(p.skip)
     .limit(p.limit);
 
+  // Attach real studentCount to every class
+  var classesWithCount = await Promise.all(classes.map(async function(cls) {
+    var count = await Student.countDocuments({ classId: cls._id });
+    var obj = cls.toJSON();
+    obj.studentCount = count;
+    return obj;
+  }));
+
   res.status(200).json({
     success: true,
     pagination: { total, page: p.page, limit: p.limit, pages: Math.ceil(total / p.limit) },
-    data: classes,
+    data: classesWithCount,
   });
 });
 

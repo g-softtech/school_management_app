@@ -1,190 +1,322 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
-import { FiPlus, FiEdit2, FiTrash2, FiEye, FiClipboard } from 'react-icons/fi';
-import Modal from '../../components/common/Modal';
-import Badge from '../../components/common/Badge';
-import Table from '../../components/common/Table';
-import ConfirmDialog from '../../components/common/ConfirmDialog';
+import { FiClipboard, FiPlus, FiEdit2, FiTrash2, FiSearch, FiEye } from 'react-icons/fi';
 import api from '../../services/api';
-import { formatDate, getErrorMessage, isOverdue } from '../../utils/helpers';
+import FilePreview from '../../components/common/FilePreview';
+import FileUpload from '../../components/common/FileUpload';
+import Modal from '../../components/common/Modal';
 import { TERMS, SESSIONS } from '../../utils/constants';
+import { formatDate, getErrorMessage } from '../../utils/helpers';
 
-const EMPTY = { classId: '', subjectId: '', title: '', question: '', dueDate: '', maxScore: 20, term: 'first', session: '2025/2026' };
+const EMPTY_FORM = { classId: '', subjectId: '', title: '', question: '', dueDate: '', maxScore: '', term: 'first', session: '2025/2026' };
+const API_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
 
 export default function TeacherAssignments() {
   const [assignments, setAssignments] = useState([]);
-  const [subjects, setSubjects]       = useState([]);
+  const [classes, setClasses]     = useState([]);
+  const [subjects, setSubjects]           = useState([]);
+  const [filteredSubjects, setFilteredSubjects] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editItem, setEditItem]   = useState(null);
+  const [viewSubs, setViewSubs]   = useState(null);  // assignment for viewing submissions
   const [submissions, setSubmissions] = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [showModal, setShowModal]     = useState(false);
-  const [showSubmissions, setShowSubmissions] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [editing, setEditing]         = useState(null);
-  const [deleting, setDeleting]       = useState(null);
-  const [viewing, setViewing]         = useState(null);
-  const [saving, setSaving]           = useState(false);
-  const [gradeForm, setGradeForm]     = useState({});
-  const [form, setForm]               = useState(EMPTY);
+  const [gradingId, setGradingId] = useState(null);
+  const [gradeForm, setGradeForm] = useState({ score: '', feedback: '' });
+  const [form, setForm]           = useState(EMPTY_FORM);
+  const [file, setFile]           = useState(null);
+  const [search, setSearch]       = useState('');
+  const [term, setTerm]           = useState('');
+  const [session, setSession]     = useState('2025/2026');
+  const [pagination, setPagination] = useState({});
+  const [page, setPage]           = useState(1);
 
-  const fetchAll = useCallback(async () => {
+  const fetchAssignments = useCallback(async () => {
     setLoading(true);
     try {
-      const [ar, sr] = await Promise.all([
-        api.get('/assignments', { params: { limit: 50 } }),
-        api.get('/subjects', { params: { limit: 50 } }),
-      ]);
-      setAssignments(ar.data.data);
-      setSubjects(sr.data.data);
+      const res = await api.get('/assignments', { params: { term: term || undefined, session, page, limit: 10 } });
+      setAssignments(res.data.data || []);
+      setPagination(res.data.pagination || {});
     } catch (err) { toast.error(getErrorMessage(err)); }
     finally { setLoading(false); }
+  }, [term, session, page]);
+
+  useEffect(() => { fetchAssignments(); }, [fetchAssignments]);
+
+  useEffect(() => {
+    Promise.allSettled([
+      api.get('/classes', { params: { limit: 100 } }),
+      api.get('/subjects', { params: { limit: 100 } }),
+    ]).then(([clRes, subRes]) => {
+      if (clRes.status  === 'fulfilled') setClasses(clRes.value.data.data || []);
+      if (subRes.status === 'fulfilled') setSubjects(subRes.value.data.data || []);
+    });
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
-
-  const classesFromSubjects = [...new Map(subjects.filter(s => s.classId).map(s => [s.classId._id, s.classId])).values()];
-  const filteredSubjects = form.classId ? subjects.filter(s => s.classId?._id === form.classId) : subjects;
-
-  const openCreate = () => { setEditing(null); setForm(EMPTY); setShowModal(true); };
-  const openEdit   = (a) => {
-    setEditing(a);
-    setForm({ classId: a.classId?._id || '', subjectId: a.subjectId?._id || '', title: a.title, question: a.question, dueDate: a.dueDate?.slice(0, 10) || '', maxScore: a.maxScore, term: a.term, session: a.session });
-    setShowModal(true);
+  const openCreate = () => { setEditItem(null); setForm(EMPTY_FORM); setFile(null); setShowModal(true); };
+  const openEdit = (a) => {
+    setEditItem(a);
+    setForm({ classId: a.classId?._id || '', subjectId: a.subjectId?._id || '', title: a.title,
+      question: a.question, dueDate: a.dueDate?.slice(0, 16) || '', maxScore: a.maxScore,
+      term: a.term, session: a.session });
+    setFile(null); setShowModal(true);
   };
 
-  const viewSubmissions = async (a) => {
-    setViewing(a);
-    setShowSubmissions(true);
-    try {
-      const res = await api.get(`/assignments/${a._id}/submissions`);
-      setSubmissions(res.data.data);
-    } catch (err) { toast.error(getErrorMessage(err)); }
-  };
+  // Filter subjects by selected class
+  useEffect(() => {
+    if (!form.classId) {
+      setFilteredSubjects(subjects);
+    } else {
+      setFilteredSubjects(subjects.filter((s) => (s.classId?._id || s.classId) === form.classId));
+    }
+  }, [form.classId, subjects]);
 
-  const handleSave = async (e) => {
-    e.preventDefault(); setSaving(true);
-    try {
-      editing
-        ? await api.patch(`/assignments/${editing._id}`, form)
-        : await api.post('/assignments', { ...form, maxScore: Number(form.maxScore) });
-      toast.success(editing ? 'Assignment updated' : 'Assignment created');
-      setShowModal(false); fetchAll();
-    } catch (err) { toast.error(getErrorMessage(err)); }
-    finally { setSaving(false); }
-  };
-
-  const handleDelete = async () => {
+  const handleSave = async () => {
+    if (!form.classId || !form.subjectId || !form.title || !form.question || !form.dueDate || !form.maxScore) {
+      toast.error('Please fill in all required fields'); return;
+    }
     setSaving(true);
-    try { await api.delete(`/assignments/${deleting._id}`); toast.success('Deleted'); setShowConfirm(false); fetchAll(); }
-    catch (err) { toast.error(getErrorMessage(err)); }
+    try {
+      const fd = new FormData();
+      Object.entries(form).forEach(([k, v]) => fd.append(k, v));
+      if (file) fd.append('file', file);
+      if (editItem) {
+        await api.patch(`/assignments/${editItem._id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        toast.success('Assignment updated!');
+      } else {
+        await api.post('/assignments', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        toast.success('Assignment created!');
+      }
+      setShowModal(false);
+      fetchAssignments();
+    } catch (err) { toast.error(getErrorMessage(err)); }
     finally { setSaving(false); }
   };
 
-  const handleGrade = async (submissionId) => {
-    const gf = gradeForm[submissionId];
-    if (!gf?.score) { toast.error('Enter a score'); return; }
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this assignment and all its submissions?')) return;
     try {
-      await api.patch(`/submissions/${submissionId}/grade`, { score: Number(gf.score), feedback: gf.feedback || '' });
-      toast.success('Graded successfully');
-      viewSubmissions(viewing);
+      await api.delete(`/assignments/${id}`);
+      toast.success('Deleted');
+      fetchAssignments();
     } catch (err) { toast.error(getErrorMessage(err)); }
   };
 
-  const submissionColumns = [
-    { key: 'studentId', label: 'Student', render: (v) => v?.userId?.name || '—' },
-    { key: 'answer',    label: 'Answer',  render: (v) => v ? <span className="text-xs text-secondary-500 line-clamp-1 max-w-48">{v}</span> : <Badge variant="info">File submitted</Badge> },
-    { key: 'status',    label: 'Status',  render: (v) => <Badge variant={v === 'graded' ? 'success' : 'warning'}>{v}</Badge> },
-    { key: 'score',     label: 'Score',   render: (v, row) => v !== null ? `${v}/${viewing?.maxScore}` : '—' },
-    { key: '_id', label: 'Grade', render: (id, row) => row.status !== 'graded' ? (
-      <div className="flex items-center gap-2">
-        <input type="number" min="0" max={viewing?.maxScore} placeholder="Score"
-          className="input-field py-1 text-xs w-16"
-          value={gradeForm[id]?.score || ''}
-          onChange={(e) => setGradeForm(f => ({ ...f, [id]: { ...f[id], score: e.target.value } }))} />
-        <input type="text" placeholder="Feedback"
-          className="input-field py-1 text-xs w-28"
-          value={gradeForm[id]?.feedback || ''}
-          onChange={(e) => setGradeForm(f => ({ ...f, [id]: { ...f[id], feedback: e.target.value } }))} />
-        <button onClick={() => handleGrade(id)} className="btn-primary py-1 text-xs">Grade</button>
-      </div>
-    ) : <span className="text-xs text-secondary-400">Graded</span> },
-  ];
+  const openSubmissions = async (assignment) => {
+    setViewSubs(assignment);
+    setSubmissions([]);
+    try {
+      const res = await api.get(`/assignments/${assignment._id}/submissions`);
+      setSubmissions(res.data.data || []);
+    } catch (err) { toast.error(getErrorMessage(err)); }
+  };
 
-  const columns = [
-    { key: 'title',     label: 'Title' },
-    { key: 'subjectId', label: 'Subject', render: (v) => v?.name || '—' },
-    { key: 'classId',   label: 'Class',   render: (v) => v ? `${v.name} ${v.section || ''}` : '—' },
-    { key: 'maxScore',  label: 'Max Score' },
-    { key: 'dueDate',   label: 'Due Date', render: (v) => <span className={isOverdue(v) ? 'text-red-500' : ''}>{formatDate(v)}</span> },
-    { key: 'isActive',  label: 'Status',  render: (v, row) => <Badge variant={isOverdue(row.dueDate) ? 'danger' : 'success'}>{isOverdue(row.dueDate) ? 'Overdue' : 'Active'}</Badge> },
-    { key: '_id', label: 'Actions', render: (_, row) => (
-      <div className="flex gap-1">
-        <button onClick={() => viewSubmissions(row)} className="p-1.5 rounded-lg hover:bg-blue-50 text-secondary-400 hover:text-blue-600 transition-colors" title="View Submissions"><FiEye size={14} /></button>
-        <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-secondary-100 text-secondary-400 hover:text-primary-600 transition-colors"><FiEdit2 size={14} /></button>
-        <button onClick={() => { setDeleting(row); setShowConfirm(true); }} className="p-1.5 rounded-lg hover:bg-red-50 text-secondary-400 hover:text-red-500 transition-colors"><FiTrash2 size={14} /></button>
-      </div>
-    )},
-  ];
+  const handleGrade = async (subId) => {
+    if (!gradeForm.score) { toast.error('Enter a score'); return; }
+    try {
+      await api.patch(`/submissions/${subId}/grade`, { score: Number(gradeForm.score), feedback: gradeForm.feedback });
+      toast.success('Graded!');
+      setGradingId(null);
+      setGradeForm({ score: '', feedback: '' });
+      openSubmissions(viewSubs);
+    } catch (err) { toast.error(getErrorMessage(err)); }
+  };
+
+  const filtered = assignments.filter((a) =>
+    !search || a.title.toLowerCase().includes(search.toLowerCase()) || a.subjectId?.name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const fc = (e) => setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div><h1 className="page-title">Assignments</h1><p className="page-subtitle">{assignments.length} assignments</p></div>
-        <button onClick={openCreate} className="btn-primary"><FiPlus size={16} />Create Assignment</button>
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div><h1 className="page-title">Assignments</h1><p className="page-subtitle">Create, manage and grade student assignments</p></div>
+        <button onClick={openCreate} className="btn-primary flex items-center gap-2"><FiPlus size={16} />New Assignment</button>
       </div>
 
-      {loading ? <div className="py-12 text-center text-secondary-400">Loading...</div> :
-      assignments.length === 0 ? (
-        <div className="card text-center py-12">
-          <FiClipboard size={36} className="text-secondary-200 mx-auto mb-3" />
-          <p className="text-secondary-400 text-sm">No assignments yet.</p>
+      <div className="card p-4 flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-48">
+          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" className="input-field pl-9 py-1.5 text-sm w-full" />
         </div>
-      ) : <Table columns={columns} data={assignments} loading={loading} />}
+        <select value={term} onChange={(e) => { setTerm(e.target.value); setPage(1); }} className="input-field py-1.5 text-sm w-32">
+          <option value="">All Terms</option>
+          {TERMS.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)} Term</option>)}
+        </select>
+        <select value={session} onChange={(e) => { setSession(e.target.value); setPage(1); }} className="input-field py-1.5 text-sm w-32">
+          {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+
+      <div className="card overflow-hidden p-0">
+        {loading ? (
+          <div className="p-6 space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-14 bg-secondary-50 rounded-xl animate-pulse" />)}</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-14 text-secondary-400"><FiClipboard size={32} className="mx-auto mb-3 opacity-40" /><p>No assignments found</p></div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead><tr className="bg-secondary-50">
+              {['Title', 'Subject', 'Class', 'Due Date', 'Max Score', 'Term', ''].map((h) => (
+                <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
+              ))}
+            </tr></thead>
+            <tbody className="divide-y divide-secondary-50">
+              {filtered.map((a) => {
+                const overdue = new Date() > new Date(a.dueDate);
+                return (
+                  <tr key={a._id} className="hover:bg-secondary-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-secondary-800 max-w-48 truncate">{a.title}</td>
+                    <td className="px-4 py-3 text-secondary-600">{a.subjectId?.name || '—'}</td>
+                    <td className="px-4 py-3 text-secondary-600">{a.classId?.name || '—'}</td>
+                    <td className="px-4 py-3 text-secondary-600">
+                      <span className={overdue ? 'text-red-500 font-medium' : ''}>{formatDate(a.dueDate)}</span>
+                    </td>
+                    <td className="px-4 py-3 text-center text-secondary-600">{a.maxScore}</td>
+                    <td className="px-4 py-3 capitalize text-secondary-600">{a.term}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openSubmissions(a)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="View submissions">
+                          <FiEye size={14} className="text-blue-500" />
+                        </button>
+                        <button onClick={() => openEdit(a)} className="p-1.5 hover:bg-secondary-100 rounded-lg transition-colors">
+                          <FiEdit2 size={14} className="text-secondary-500" />
+                        </button>
+                        <button onClick={() => handleDelete(a._id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors">
+                          <FiTrash2 size={14} className="text-red-400" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {pagination.pages > 1 && (
+        <div className="flex justify-center gap-2">
+          {[...Array(pagination.pages)].map((_, i) => (
+            <button key={i} onClick={() => setPage(i + 1)} className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${page === i + 1 ? 'bg-primary-500 text-white' : 'bg-white border border-secondary-200 text-secondary-600 hover:border-primary-300'}`}>{i + 1}</button>
+          ))}
+        </div>
+      )}
 
       {/* Create/Edit Modal */}
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Assignment' : 'Create Assignment'} size="lg">
-        <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="input-label">Class *</label>
-              <select className="input-field" value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value, subjectId: '' })} required>
-                <option value="">— Select Class —</option>
-                {classesFromSubjects.map((c) => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editItem ? 'Edit Assignment' : 'New Assignment'} size="lg">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="input-label">Class <span className="text-red-500">*</span></label>
+              <select name="classId" value={form.classId} onChange={fc} className="input-field">
+                <option value="">Select class…</option>
+                {classes.map((c) => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
               </select>
             </div>
-            <div><label className="input-label">Subject *</label>
-              <select className="input-field" value={form.subjectId} onChange={(e) => setForm({ ...form, subjectId: e.target.value })} required>
-                <option value="">— Select Subject —</option>
+            <div>
+              <label className="input-label">Subject <span className="text-red-500">*</span></label>
+              <select name="subjectId" value={form.subjectId} onChange={fc} className="input-field">
+                <option value="">Select subject…</option>
                 {filteredSubjects.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+                {form.classId && filteredSubjects.length === 0 && (
+                  <option disabled>No subjects for this class</option>
+                )}
               </select>
             </div>
-            <div className="col-span-2"><label className="input-label">Title *</label><input className="input-field" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></div>
-            <div className="col-span-2"><label className="input-label">Question *</label><textarea rows={3} className="input-field" value={form.question} onChange={(e) => setForm({ ...form, question: e.target.value })} required /></div>
-            <div><label className="input-label">Due Date *</label><input type="date" className="input-field" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} required /></div>
-            <div><label className="input-label">Max Score *</label><input type="number" min="1" max="100" className="input-field" value={form.maxScore} onChange={(e) => setForm({ ...form, maxScore: e.target.value })} required /></div>
-            <div><label className="input-label">Term</label>
-              <select className="input-field" value={form.term} onChange={(e) => setForm({ ...form, term: e.target.value })}>
-                {TERMS.map((t) => <option key={t} value={t}>{t}</option>)}
+            <div className="sm:col-span-2">
+              <label className="input-label">Title <span className="text-red-500">*</span></label>
+              <input name="title" value={form.title} onChange={fc} placeholder="Assignment title" className="input-field" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="input-label">Question <span className="text-red-500">*</span></label>
+              <textarea name="question" value={form.question} onChange={fc} rows={3} placeholder="Write the assignment question…" className="input-field resize-none" />
+            </div>
+            <div>
+              <label className="input-label">Due Date <span className="text-red-500">*</span></label>
+              <input name="dueDate" type="datetime-local" value={form.dueDate} onChange={fc} className="input-field" />
+            </div>
+            <div>
+              <label className="input-label">Max Score <span className="text-red-500">*</span></label>
+              <input name="maxScore" type="number" min="1" value={form.maxScore} onChange={fc} placeholder="e.g. 100" className="input-field" />
+            </div>
+            <div>
+              <label className="input-label">Term</label>
+              <select name="term" value={form.term} onChange={fc} className="input-field capitalize">
+                {TERMS.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)} Term</option>)}
               </select>
             </div>
-            <div><label className="input-label">Session</label>
-              <select className="input-field" value={form.session} onChange={(e) => setForm({ ...form, session: e.target.value })}>
+            <div>
+              <label className="input-label">Session</label>
+              <select name="session" value={form.session} onChange={fc} className="input-field">
                 {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
-          <div className="flex gap-3 justify-end pt-2">
-            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
-            <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Saving...' : editing ? 'Update' : 'Create'}</button>
+          <FileUpload
+            value={file}
+            onChange={setFile}
+            label="Attach File (optional)"
+            placeholder="Upload PDF, image, Word doc or any resource"
+            existingFileName={editItem?.fileName}
+            maxSizeMB={20}
+          />
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
+            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1">{saving ? 'Saving…' : editItem ? 'Save Changes' : 'Create'}</button>
           </div>
-        </form>
+        </div>
       </Modal>
 
       {/* Submissions Modal */}
-      <Modal isOpen={showSubmissions} onClose={() => setShowSubmissions(false)} title={`Submissions — ${viewing?.title}`} size="xl">
-        <Table columns={submissionColumns} data={submissions} loading={false} emptyMessage="No submissions yet" />
-      </Modal>
+      <Modal isOpen={!!viewSubs} onClose={() => { setViewSubs(null); setGradingId(null); }} title={`Submissions — ${viewSubs?.title || ''}`} size="xl">
+        {submissions.length === 0 ? (
+          <p className="text-center text-secondary-400 py-10">No submissions yet</p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex gap-4 text-sm text-secondary-500 pb-2 border-b border-secondary-100">
+              <span>Total: <b>{submissions.length}</b></span>
+              <span>Graded: <b>{submissions.filter((s) => s.status === 'graded').length}</b></span>
+              <span>Pending: <b>{submissions.filter((s) => s.status !== 'graded').length}</b></span>
+            </div>
+            {submissions.map((sub) => (
+              <div key={sub._id} className="border border-secondary-100 rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-secondary-800">{sub.studentId?.userId?.name || '—'}</p>
+                    <p className="text-xs text-secondary-400">{sub.studentId?.admissionNumber} · Submitted: {formatDate(sub.submittedAt)}</p>
+                  </div>
+                  {sub.status === 'graded' ? (
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-green-600">{sub.score}/{viewSubs?.maxScore}</p>
+                      <p className="text-xs text-secondary-400">Graded</p>
+                    </div>
+                  ) : (
+                    <button onClick={() => { setGradingId(sub._id); setGradeForm({ score: '', feedback: '' }); }} className="btn-primary text-xs py-1.5 px-3">
+                      Grade
+                    </button>
+                  )}
+                </div>
+                {sub.answer && <p className="text-sm text-secondary-700 bg-secondary-50 rounded-lg p-2.5">{sub.answer}</p>}
+                {sub.fileUrl && (
+                  <FilePreview fileUrl={sub.fileUrl} fileName={sub.fileName} size="sm" />
+                )}
+                {sub.feedback && <p className="text-xs text-blue-700 bg-blue-50 rounded-lg p-2">Feedback: {sub.feedback}</p>}
 
-      <ConfirmDialog isOpen={showConfirm} onClose={() => setShowConfirm(false)} onConfirm={handleDelete} loading={saving}
-        title="Delete Assignment" message={`Delete "${deleting?.title}"? All submissions will also be deleted.`} />
+                {gradingId === sub._id && (
+                  <div className="flex gap-2 pt-1">
+                    <input type="number" value={gradeForm.score} onChange={(e) => setGradeForm((p) => ({ ...p, score: e.target.value }))} placeholder={`Score (max ${viewSubs?.maxScore})`} min="0" max={viewSubs?.maxScore} className="input-field py-1.5 text-sm w-36" />
+                    <input value={gradeForm.feedback} onChange={(e) => setGradeForm((p) => ({ ...p, feedback: e.target.value }))} placeholder="Feedback (optional)" className="input-field py-1.5 text-sm flex-1" />
+                    <button onClick={() => handleGrade(sub._id)} className="btn-primary text-sm px-4">Save</button>
+                    <button onClick={() => setGradingId(null)} className="btn-secondary text-sm px-3">✕</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

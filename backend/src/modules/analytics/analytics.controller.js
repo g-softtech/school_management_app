@@ -201,10 +201,29 @@ exports.getClassAnalytics = catchAsync(async function(req, res, next) {
     },
   ]);
 
+  // Merge students with no results (show them at bottom with 0 avg)
+  var allEnrolled = await Student.find({ classId: classId, isActive: true })
+    .populate('userId', 'name')
+    .lean();
+
+  var rankedIds = new Set(studentRankings.map(function(r) { return String(r._id); }));
+  allEnrolled.forEach(function(stu) {
+    if (!rankedIds.has(String(stu._id))) {
+      studentRankings.push({
+        _id:             stu._id,
+        studentName:     stu.userId ? stu.userId.name : 'Unknown',
+        admissionNumber: stu.admissionNumber,
+        avgScore:        0,
+        totalScore:      0,
+        subjects:        0,
+      });
+    }
+  });
+
   // Add position
   studentRankings.forEach(function(s, i) { s.position = i + 1; });
 
-  var enrolledCount = await Student.countDocuments({ classId: classId, isActive: true });
+  var enrolledCount = allEnrolled.length;
   var passRate = stats.total > 0 ? Number(((stats.passed / stats.total) * 100).toFixed(1)) : 0;
 
   res.status(200).json({

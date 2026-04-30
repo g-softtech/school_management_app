@@ -72,6 +72,9 @@ app.get('/api/students/:id/idcard',  protect, restrictTo('admin'), generateStude
 app.get('/api/results/share/:token', viewSharedResult);
 app.post('/api/results/share-token', protect, generateShareToken);
 
+// ── Users directory (for messaging user picker) ──────────────────────────────
+app.use('/api/users', require('./src/modules/auth/users.routes'));
+
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.all('/{*path}', function(req, res, next) {
   next(new ApiError(404, 'Route ' + req.method + ' ' + req.originalUrl + ' not found'));

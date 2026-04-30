@@ -69,3 +69,78 @@ exports.updatePassword = catchAsync(async function(req, res, next) {
   user.refreshToken = tokens.refreshToken;
   await user.save({ validateBeforeSave: false });
 });
+
+const crypto = require('crypto');
+
+exports.forgotPassword = catchAsync(async function(req, res, next) {
+  var email = req.body.email;
+  if (!email) return next(new ApiError(400, 'Please provide your email address'));
+
+  var user = await User.findOne({ email: email.toLowerCase() });
+  // Always respond success to prevent email enumeration
+  if (!user) {
+    return res.status(200).json({
+      success: true,
+      message: 'If an account with that email exists, a reset link has been sent.',
+    });
+  }
+
+  // Generate reset token
+  var resetToken = crypto.randomBytes(32).toString('hex');
+  user.passwordResetToken   = crypto.createHash('sha256').update(resetToken).digest('hex');
+  user.passwordResetExpires = Date.now() + 30 * 60 * 1000; // 30 minutes
+  await user.save({ validateBeforeSave: false });
+
+  // In production: send email. For now we return the token in dev mode.
+  var resetUrl = (process.env.FRONTEND_URL || 'http://localhost:5173') + '/reset-password/' + resetToken;
+
+  if (process.env.NODE_ENV === 'production') {
+    // TODO: integrate nodemailer or Sendgrid here
+    // For now just confirm it was generated
+    console.log('[ForgotPassword] Reset URL for', email, ':', resetUrl);
+    return res.status(200).json({
+      success: true,
+      message: 'If an account with that email exists, a reset link has been sent.',
+    });
+  }
+
+  // Development: return token directly so testing is easy
+  res.status(200).json({
+    success: true,
+    message: 'Password reset link generated (dev mode — check response data).',
+    resetUrl,    // remove in production
+    resetToken,  // remove in production
+  });
+});
+
+exports.resetPassword = catchAsync(async function(req, res, next) {
+  var rawToken  = req.params.token;
+  var newPassword = req.body.password;
+
+  if (!newPassword || newPassword.length < 8) {
+    return next(new ApiError(400, 'Password must be at least 8 characters'));
+  }
+
+  // Hash the incoming token to compare with DB
+  var hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+  var user = await User.findOne({
+    passwordResetToken:   hashedToken,
+    passwordResetExpires: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    return next(new ApiError(400, 'Reset link is invalid or has expired. Please request a new one.'));
+  }
+
+  // Set new password and clear reset fields
+  user.password             = newPassword;
+  user.passwordResetToken   = undefined;
+  user.passwordResetExpires = undefined;
+  await user.save();
+
+  // Log them in immediately
+  var tokens = sendTokenResponse(user, 200, res);
+  user.refreshToken = tokens.refreshToken;
+  await user.save({ validateBeforeSave: false });
+});

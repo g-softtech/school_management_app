@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import Sidebar from './Sidebar';
-import Topbar  from './Topbar';
+import Sidebar         from './Sidebar';
+import Topbar          from './Topbar';
+import SmartAssistant  from '../common/SmartAssistant';
 
 export default function DashboardLayout({ children, pageTitle }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -31,6 +32,10 @@ export default function DashboardLayout({ children, pageTitle }) {
         </main>
 
       </div>
+
+      {/* AI Smart Assistant — floating widget on all portals */}
+      <SmartAssistant />
+
     </div>
   );
 }

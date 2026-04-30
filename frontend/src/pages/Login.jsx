@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { FiMail, FiLock, FiEye, FiEyeOff, FiBookOpen } from 'react-icons/fi';
+import { FiMail, FiLock, FiEye, FiEyeOff, FiBookOpen, FiArrowLeft } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { loginUser } from '../services/authService';
 import { getErrorMessage } from '../utils/helpers';
@@ -180,6 +180,13 @@ export default function Login() {
               </div>
 
               {/* Submit */}
+              {/* Forgot password */}
+              <div className="flex justify-end">
+                <Link to="/forgot-password" className="text-xs text-primary-500 hover:text-primary-600 font-medium transition-colors">
+                  Forgot password?
+                </Link>
+              </div>
+
               <button
                 type="submit"
                 disabled={loading}
@@ -218,9 +225,14 @@ export default function Login() {
             </div>
           </div>
 
-          <p className="text-center text-xs text-secondary-400 mt-6">
-            © {new Date().getFullYear()} {APP_NAME} · Built for African Schools
-          </p>
+          <div className="flex flex-col items-center gap-2 mt-6">
+            <Link to="/" className="flex items-center gap-1.5 text-xs text-secondary-400 hover:text-primary-500 transition-colors">
+              <FiArrowLeft size={12} /> Back to school website
+            </Link>
+            <p className="text-xs text-secondary-400">
+              © {new Date().getFullYear()} {APP_NAME} · Built for African Schools
+            </p>
+          </div>
         </div>
       </div>
     </div>

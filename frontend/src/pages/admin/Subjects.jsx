@@ -31,16 +31,15 @@ export default function AdminSubjects() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [sr, cr, subr] = await Promise.all([
-        api.get('/subjects', { params: { limit: 100, classId: filterClass || undefined } }),
+      const [sr, cr, tr] = await Promise.all([
+        api.get('/subjects', { params: { limit: 500, classId: filterClass || undefined } }),
         getClasses({ limit: 100 }),
-        api.get('/subjects', { params: { limit: 100 } }),
+        // Load ALL teachers from user directory — not just those already assigned
+        api.get('/users/directory', { params: { role: 'teacher', limit: 200 } }),
       ]);
-      setSubjects(sr.data.data);
-      setClasses(cr.data.data);
-      const tMap = {};
-      subr.data.data.forEach((s) => { if (s.teacherId) tMap[s.teacherId._id] = s.teacherId; });
-      setTeachers(Object.values(tMap));
+      setSubjects(sr.data.data || []);
+      setClasses(cr.data.data || []);
+      setTeachers(tr.data.data || []);
     } catch (err) { toast.error(getErrorMessage(err)); }
     finally { setLoading(false); }
   }, [filterClass]);

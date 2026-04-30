@@ -135,3 +135,13 @@ exports.deleteStudent = catchAsync(async function(req, res, next) {
   await Student.findByIdAndDelete(req.params.id);
   res.status(200).json({ success: true, message: 'Student and associated user account deleted successfully' });
 });
+// GET /api/students/my-child — Parent fetches their linked child's student record
+exports.getMyChild = catchAsync(async function(req, res, next) {
+  var student = await Student.findOne({ parentId: req.user._id })
+    .populate('userId', 'name email lastLogin')
+    .populate('classId', 'name section academicYear')
+    .populate('parentId', 'name email');
+
+  if (!student) return next(new ApiError(404, 'No child linked to your account. Contact the school admin.'));
+  res.status(200).json({ success: true, data: student });
+});
