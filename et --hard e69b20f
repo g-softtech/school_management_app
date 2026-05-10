@@ -1,0 +1,16 @@
+[33me520840[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m fix case mismatches and add .js extensions for Render deployment
+[33m762573c[m fix module paths
+[33m21736b7[m fix AuditLog module path and casing
+[33m235b426[m fix AuditLog casing issue for Render
+[33m246fce6[m fix AuditLog casing issue for Render
+[33me69b20f[m UI upgrade done
+[33m76d0788[m phase 4 completed
+[33m9953a15[m phase 6 completed
+[33mcc5d237[m phase 4 completed
+[33m28c3a7c[m phase 3 done
+[33md6339ff[m project setup completed
+[33m0d475f1[m analytics completed
+[33mbce74ba[m stage 7, messaging module built
+[33m9b4d48d[m Result Management System completed and tested
+[33m8e8fa1e[m stages 1 and 2 completed. endpoints working
+[33m3e702d2[m initial commit - school app setup

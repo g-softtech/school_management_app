@@ -8,8 +8,8 @@ const IMG = {
 // 20 gallery items using free Unsplash education/Africa themed photos
 const GALLERY_ITEMS = [
   { id:1,  category:'classrooms', title:'Interactive Learning Session',    url:'https://images.unsplash.com/photo-1588072432836-e10032774350?w=800&q=80' },
-  { id:2,  category:'events',     title:'Annual Prize Giving Day',         url:'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800&q=80' },
-  { id:3,  category:'classrooms', title:'Science Laboratory Practicals',   url:'https://images.unsplash.com/photo-1532094349884-543559822958?w=800&q=80' },
+  // { id:2,  category:'events',     title:'Annual Prize Giving Day',         url:'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800&q=80' },
+  { id:3,  category:'classrooms', title:'Science Laboratory Practicals',   url:'https://images.pexels.com/photos/3912981/pexels-photo-3912981.jpeg?auto=compress&cs=tinysrgb&w=800' },
   { id:4,  category:'sports',     title:'Inter-House Sports Competition',  url:'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80' },
   { id:5,  category:'classrooms', title:'Library & Reading Centre',        url:'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=800&q=80' },
   { id:6,  category:'events',     title:'Graduation Ceremony 2024',        url:'https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=800&q=80' },

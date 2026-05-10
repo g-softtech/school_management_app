@@ -4,7 +4,7 @@ import { FiMapPin, FiPhone, FiMail, FiClock, FiSend, FiCheckCircle } from 'react
 import api from '../../services/api';
 
 const IMG = {
-  hero: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1400&q=80',
+  hero: 'https://images.pexels.com/photos/5905709/pexels-photo-5905709.jpeg?auto=compress&cs=tinysrgb&w=1400',
 };
 
 const CONTACT_INFO = [
