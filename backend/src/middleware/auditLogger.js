@@ -1,4 +1,4 @@
-const AuditLog = require('../models/AuditLog');
+const AuditLog = require('../models/Auditlog');
 
 // Auto-log all mutating requests (POST, PUT, PATCH, DELETE)
 var auditLogger = function(req, res, next) {

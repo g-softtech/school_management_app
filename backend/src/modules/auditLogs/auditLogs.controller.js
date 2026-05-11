@@ -1,4 +1,4 @@
-const AuditLog   = require('../../models/AuditLog');
+const AuditLog   = require('../../models/Auditlog');
 const catchAsync = require('../../utils/catchAsync');
 const paginate   = require('../../utils/paginate');
 
