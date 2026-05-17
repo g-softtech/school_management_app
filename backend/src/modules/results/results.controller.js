@@ -200,8 +200,10 @@ exports.getClassResults = catchAsync(async function(req, res, next) {
   }
 
   var results = await Result.find({ classId: classId, term: term, session: session })
-    .populate('studentId', 'admissionNumber')
-    .populate('subjectId', 'name code');
+    // AFTER
+.populate({ path: 'studentId', select: 'admissionNumber userId classId', populate: { path: 'userId', select: 'name email' } })
+.populate('subjectId', 'name code')
+.populate('classId', 'name section')
 
   var studentMap = {};
   results.forEach(function(r) {
