@@ -1,5 +1,4 @@
 const Result  = require('../../models/Result');
-const notifSvc = require('../../../services/notificationService');
 const Student = require('../../models/Student');
 const Subject = require('../../models/Subject');
 const Class   = require('../../models/Class');
@@ -61,13 +60,10 @@ exports.uploadResult = catchAsync(async function(req, res, next) {
     },
     { new: true, upsert: true, runValidators: false }
   )
-    .populate({ path: 'studentId', select: 'admissionNumber userId classId', populate: { path: 'userId', select: 'name email' } })
+    .populate('studentId', 'admissionNumber')
     .populate('subjectId', 'name code')
     .populate('classId',   'name section')
     .populate('uploadedBy','name');
-
-  // Fire notification (non-blocking)
-  notifSvc.onResultsPublished(result.studentId, result.term, result.session).catch(() => {});
 
   res.status(200).json({ success: true, message: 'Result uploaded successfully', data: result });
 });
@@ -186,11 +182,12 @@ exports.getStudentResults = catchAsync(async function(req, res, next) {
   });
 });
 
-// ─── Get class results summary ────────────────────────────────────────────────
+// ─── Get class results — raw populated docs for frontend table + report card
 exports.getClassResults = catchAsync(async function(req, res, next) {
-  var classId = req.params.classId;
-  var term    = req.query.term;
-  var session = req.query.session;
+  var classId   = req.params.classId;
+  var term      = req.query.term;
+  var session   = req.query.session;
+  var studentId = req.query.studentId;
 
   var cls = await Class.findById(classId);
   if (!cls) return next(new ApiError(404, 'Class not found'));
@@ -199,57 +196,31 @@ exports.getClassResults = catchAsync(async function(req, res, next) {
     return next(new ApiError(400, 'Please provide term and session as query params'));
   }
 
-  var results = await Result.find({ classId: classId, term: term, session: session })
-    // AFTER
-.populate({ path: 'studentId', select: 'admissionNumber userId classId', populate: { path: 'userId', select: 'name email' } })
-.populate('subjectId', 'name code')
-.populate('classId', 'name section')
+  var filter = { classId: classId, term: term, session: session };
+  if (studentId) filter.studentId = studentId;
 
-  var studentMap = {};
-  results.forEach(function(r) {
-    var sid = String(r.studentId._id);
-    if (!studentMap[sid]) {
-      studentMap[sid] = {
-        admissionNumber: r.studentId.admissionNumber,
-        subjects:    [],
-        totalScore:  0,
-        passCount:   0,
-      };
-    }
-    studentMap[sid].subjects.push({
-      subject: r.subjectId ? r.subjectId.name : 'Unknown',
-      ca:      r.ca,
-      exam:    r.exam,
-      total:   r.total,
-      grade:   r.grade,
-      remark:  r.remark,
-    });
-    studentMap[sid].totalScore += r.total;
-    if (isPassing(r.grade)) studentMap[sid].passCount++;
-  });
-
-  var summary = Object.values(studentMap).map(function(s) {
-    s.average = s.subjects.length > 0 ? Number((s.totalScore / s.subjects.length).toFixed(1)) : 0;
-    return s;
-  });
-
-  summary.sort(function(a, b) { return b.average - a.average; });
-  summary.forEach(function(s, i) { s.position = i + 1; });
+  var results = await Result.find(filter)
+    .populate({
+      path:     'studentId',
+      select:   'admissionNumber userId classId',
+      populate: { path: 'userId', select: 'name email' },
+    })
+    .populate('subjectId', 'name code')
+    .populate('classId',   'name section')
+    .sort({ createdAt: -1 })
+    .limit(500);
 
   res.status(200).json({
     success: true,
-    class:         cls.name + (cls.section ? ' ' + cls.section : ''),
-    term:          term,
-    session:       session,
-    totalStudents: summary.length,
-    data:          summary,
+    count:   results.length,
+    data:    results,
   });
 });
 
 // ─── Get single result ────────────────────────────────────────────────────────
 exports.getResult = catchAsync(async function(req, res, next) {
   var result = await Result.findById(req.params.id)
-    .populate({ path: 'studentId', select: 'admissionNumber userId classId', populate: { path: 'userId', select: 'name email' } })
+    .populate('studentId', 'admissionNumber')
     .populate('subjectId', 'name code')
     .populate('classId',   'name section')
     .populate('uploadedBy','name');
@@ -277,7 +248,7 @@ exports.updateResult = catchAsync(async function(req, res, next) {
     { new: true }
   )
     .populate('subjectId', 'name code')
-    .populate({ path: 'studentId', select: 'admissionNumber userId classId', populate: { path: 'userId', select: 'name email' } });
+    .populate('studentId', 'admissionNumber');
 
   res.status(200).json({ success: true, message: 'Result updated successfully', data: updated });
 });
