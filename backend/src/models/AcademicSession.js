@@ -2,15 +2,14 @@ const mongoose = require('mongoose');
 
 const termSchema = new mongoose.Schema({
   name:      { type: String, enum: ['first','second','third'], required: true },
-  startDate: { type: Date, required: true },
-  endDate:   { type: Date, required: true },
+  startDate: { type: Date, default: null },  // NOT required — optional
+  endDate:   { type: Date, default: null },  // NOT required — optional
   isActive:  { type: Boolean, default: false },
 }, { _id: true });
 
 const academicSessionSchema = new mongoose.Schema({
   name: {
     type: String, required: true, trim: true, unique: true,
-    // e.g. "2025/2026"
   },
   startDate:  { type: Date, required: true },
   endDate:    { type: Date, required: true },
