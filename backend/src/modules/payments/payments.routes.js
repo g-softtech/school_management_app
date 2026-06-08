@@ -1,28 +1,31 @@
-const express = require('express');
-const router  = express.Router();
-const {
-  initializePayment,
-  verifyPayment,
-  webhook,
-  recordManualPayment,
-  getStudentPayments,
-  getAllPayments,
-  getReceipt,
-} = require('./payments.controller');
+const express    = require('express');
+const router     = express.Router();
+const ctrl       = require('./payments.controller');
 const protect    = require('../../middleware/authMiddleware');
 const restrictTo = require('../../middleware/roleMiddleware');
 
-// Webhook must be public — no auth, Paystack calls this directly
-router.post('/webhook', webhook);
+// Public — Paystack webhook
+router.post('/webhook', ctrl.webhook);
 
-// All routes below require authentication
 router.use(protect);
 
-router.post('/initialize',            restrictTo('admin', 'parent'), initializePayment);
-router.get('/verify/:reference',      verifyPayment);
-router.post('/manual',                restrictTo('admin'), recordManualPayment);
-router.get('/',                       restrictTo('admin'), getAllPayments);
-router.get('/student/:studentId',     restrictTo('admin', 'parent'), getStudentPayments);
-router.get('/:id/receipt',            restrictTo('admin', 'parent'), getReceipt);
+// Analytics
+router.get('/analytics',  restrictTo('admin'), ctrl.getAnalytics);
+
+// Admin only
+router.get('/',           restrictTo('admin'), ctrl.getAllPayments);
+router.post('/manual',    restrictTo('admin'), ctrl.recordManualPayment);
+router.patch('/:id/approve', restrictTo('admin'), ctrl.approvePayment);
+router.patch('/:id/reject',  restrictTo('admin'), ctrl.rejectPayment);
+
+// Admin + parent + student
+router.get('/student/:studentId', ctrl.getStudentPayments);
+router.get('/:id/receipt',        ctrl.getReceipt);
+
+// Initialize — admin or parent
+router.post('/initialize', restrictTo('admin','parent'), ctrl.initializePayment);
+
+// Verify — public (Paystack redirects here)
+router.get('/verify/:reference', ctrl.verifyPayment);
 
 module.exports = router;

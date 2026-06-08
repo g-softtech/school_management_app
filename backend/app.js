@@ -41,7 +41,7 @@ app.get('/api/health', function(req, res) {
   res.status(200).json({ success: true, message: 'SmartSchool API is running', environment: NODE_ENV, timestamp: new Date().toISOString() });
 });
 
-// ── Existing routes ───────────────────────────────────────────────────────────
+// ── Core routes ───────────────────────────────────────────────────────────────
 app.use('/api/auth',      require('./src/modules/auth/auth.routes'));
 app.use('/api/students',  require('./src/modules/students/students.routes'));
 app.use('/api/classes',   require('./src/modules/classes/classes.routes'));
@@ -60,11 +60,23 @@ app.use('/api/weekly-planner', require('./src/modules/weeklyPlanner/weeklyPlanne
 // ── Extension routes ──────────────────────────────────────────────────────────
 app.use('/api/notifications',  require('./src/modules/notifications/notifications.routes'));
 app.use('/api/ai',             require('./src/modules/ai/ai.routes'));
-app.use('/api/audit-logs',        require('./src/modules/auditLogs/auditLogs.routes'));
+app.use('/api/audit-logs',     require('./src/modules/auditLogs/auditLogs.routes'));
+
+// ── User management (admin) ───────────────────────────────────────────────────
+app.use('/api/users',          require('./src/modules/auth/users.routes'));
+
+// ── Contact & Admissions (public website) ────────────────────────────────────
+app.use('/api/contact',        require('./src/modules/contact/contact.routes'));
+
+// ── Academic structure ────────────────────────────────────────────────────────
 app.use('/api/academic-sessions', require('./src/modules/academicSession/academicSession.routes'));
 app.use('/api/timetable',         require('./src/modules/timetable/timetable.routes'));
 
-// ── ID card + shareable result (standalone endpoints) ─────────────────────────
+// ── Financial system ──────────────────────────────────────────────────────────
+app.use('/api/fee-structures', require('./src/modules/feeStructure/feeStructure.routes'));
+app.use('/api/bills',          require('./src/modules/studentBill/studentBill.routes'));
+
+// ── ID card + shareable result ────────────────────────────────────────────────
 var protect    = require('./src/middleware/authMiddleware');
 var restrictTo = require('./src/middleware/roleMiddleware');
 var { generateStudentIDCard } = require('./src/modules/students/idcard.controller');
@@ -73,10 +85,6 @@ var { generateShareToken, viewSharedResult } = require('./src/modules/results/sh
 app.get('/api/students/:id/idcard',  protect, restrictTo('admin'), generateStudentIDCard);
 app.get('/api/results/share/:token', viewSharedResult);
 app.post('/api/results/share-token', protect, generateShareToken);
-
-// ── Users directory (for messaging user picker) ──────────────────────────────
-app.use('/api/users',   require('./src/modules/auth/users.routes'));
-app.use('/api/contact', require('./src/modules/contact/contact.routes'));
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.all('/{*path}', function(req, res, next) {

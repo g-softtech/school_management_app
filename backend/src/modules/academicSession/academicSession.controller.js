@@ -1,23 +1,26 @@
+const mongoose    = require('mongoose');
 const AcademicSession = require('../../models/AcademicSession');
-const ApiError        = require('../../utils/ApiError');
-const catchAsync      = require('../../utils/catchAsync');
+const ApiError    = require('../../utils/ApiError');
+const catchAsync  = require('../../utils/catchAsync');
 
-// Helper — clean term dates (convert empty strings to null)
+const VALID_TERM_NAMES = ['first', 'second', 'third'];
+
+// Safely clean terms — filter out invalid names, nullify bad dates
 function cleanTerms(terms) {
   if (!Array.isArray(terms)) return [];
-  return terms.map(function(t) {
-    return {
+  return terms
+    .filter(t => t && VALID_TERM_NAMES.includes(t.name))
+    .map(t => ({
       name:      t.name,
-      startDate: t.startDate && t.startDate !== '' ? t.startDate : null,
-      endDate:   t.endDate   && t.endDate   !== '' ? t.endDate   : null,
-      isActive:  t.isActive || false,
-    };
-  });
+      startDate: (t.startDate && t.startDate !== '') ? new Date(t.startDate) : null,
+      endDate:   (t.endDate   && t.endDate   !== '') ? new Date(t.endDate)   : null,
+      isActive:  Boolean(t.isActive),
+    }));
 }
 
 // GET /api/academic-sessions
 exports.getAll = catchAsync(async (req, res) => {
-  const sessions = await AcademicSession.find().sort({ startDate: -1 });
+  const sessions = await AcademicSession.find().sort({ createdAt: -1 });
   res.json({ success: true, data: sessions });
 });
 
@@ -31,52 +34,67 @@ exports.getCurrent = catchAsync(async (req, res) => {
 exports.create = catchAsync(async (req, res, next) => {
   const { name, startDate, endDate, isCurrent, terms } = req.body;
 
-  if (!name)      return next(new ApiError(400, 'Session name is required'));
-  if (!startDate) return next(new ApiError(400, 'Session start date is required'));
-  if (!endDate)   return next(new ApiError(400, 'Session end date is required'));
+  // Validate required fields
+  if (!name || String(name).trim() === '')
+    return next(new ApiError(400, 'Session name is required'));
+  if (!startDate || String(startDate).trim() === '')
+    return next(new ApiError(400, 'Start date is required'));
+  if (!endDate || String(endDate).trim() === '')
+    return next(new ApiError(400, 'End date is required'));
 
-  // If setting as current, unset all others first
+  // Check for duplicate session name
+  const existing = await AcademicSession.findOne({ name: String(name).trim() });
+  if (existing)
+    return next(new ApiError(400, `A session named "${name}" already exists`));
+
+  // Unset current if needed — do BEFORE creating new one
   if (isCurrent) {
     await AcademicSession.updateMany({}, { isCurrent: false });
   }
 
-  const session = await AcademicSession.create({
-    name,
-    startDate,
-    endDate,
-    isCurrent: isCurrent || false,
-    terms:     cleanTerms(terms),
+  const cleanedTerms = cleanTerms(terms);
+
+  const session = new AcademicSession({
+    name:      String(name).trim(),
+    startDate: new Date(startDate),
+    endDate:   new Date(endDate),
+    isCurrent: Boolean(isCurrent),
+    terms:     cleanedTerms,
     createdBy: req.user._id,
   });
 
+  await session.save({ validateBeforeSave: true });
+
   res.status(201).json({
     success: true,
-    message: 'Academic session created',
+    message: 'Academic session created successfully',
     data:    session,
   });
 });
 
 // PATCH /api/academic-sessions/:id
 exports.update = catchAsync(async (req, res, next) => {
-  const { name, startDate, endDate, isCurrent, isActive, terms } = req.body;
+  const session = await AcademicSession.findById(req.params.id);
+  if (!session) return next(new ApiError(404, 'Session not found'));
 
-  const fields = {};
-  if (name      !== undefined) fields.name      = name;
-  if (startDate !== undefined && startDate !== '') fields.startDate = startDate;
-  if (endDate   !== undefined && endDate   !== '') fields.endDate   = endDate;
-  if (isCurrent !== undefined) fields.isCurrent = isCurrent;
-  if (isActive  !== undefined) fields.isActive  = isActive;
-  if (terms     !== undefined) fields.terms     = cleanTerms(terms);
+  if (req.body.name      !== undefined) session.name      = String(req.body.name).trim();
+  if (req.body.isActive  !== undefined) session.isActive  = Boolean(req.body.isActive);
+  if (req.body.isCurrent !== undefined) session.isCurrent = Boolean(req.body.isCurrent);
 
-  // If setting as current, unset all others first
-  if (fields.isCurrent) {
-    await AcademicSession.updateMany({ _id: { $ne: req.params.id } }, { isCurrent: false });
+  if (req.body.startDate && req.body.startDate !== '')
+    session.startDate = new Date(req.body.startDate);
+  if (req.body.endDate && req.body.endDate !== '')
+    session.endDate = new Date(req.body.endDate);
+
+  if (req.body.terms !== undefined)
+    session.terms = cleanTerms(req.body.terms);
+
+  // If setting as current, unset others first
+  if (session.isCurrent) {
+    await AcademicSession.updateMany({ _id: { $ne: session._id } }, { isCurrent: false });
   }
 
-  const session = await AcademicSession.findByIdAndUpdate(
-    req.params.id, fields, { new: true, runValidators: true }
-  );
-  if (!session) return next(new ApiError(404, 'Session not found'));
+  await session.save();
 
   res.json({ success: true, message: 'Session updated', data: session });
 });

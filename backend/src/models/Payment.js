@@ -1,78 +1,52 @@
 const mongoose = require('mongoose');
 
-const paymentSchema = new mongoose.Schema(
-  {
-    studentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Student',
-      required: [true, 'Student ID is required'],
-    },
-    amount: {
-      type: Number,
-      required: [true, 'Amount is required'],
-      min: [1, 'Amount must be greater than 0'],
-    },
-    feeType: {
-      type: String,
-      required: [true, 'Fee type is required'],
-      enum: {
-        values: ['tuition', 'exam', 'sports', 'library', 'development', 'other'],
-        message: 'feeType must be one of: tuition, exam, sports, library, development, other',
-      },
-    },
-    term: {
-      type: String,
-      required: [true, 'Term is required'],
-      enum: { values: ['first', 'second', 'third'], message: 'Term must be first, second or third' },
-    },
-    session: {
-      type: String,
-      required: [true, 'Session is required'],
-      trim: true,
-    },
-    status: {
-      type: String,
-      enum: ['pending', 'paid', 'failed'],
-      default: 'pending',
-    },
-    paymentMethod: {
-      type: String,
-      enum: ['paystack', 'cash', 'bank_transfer'],
-      default: 'paystack',
-    },
-    reference: {
-      type: String,
-      unique: true,
-      sparse: true, // allows multiple nulls
-    },
-    paystackData: {
-      type: Object,
-      default: null,
-    },
-    receiptNumber: {
-      type: String,
-      unique: true,
-      sparse: true,
-    },
-    recordedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      default: null,
-    },
-    paidAt: {
-      type: Date,
-      default: null,
-    },
-    notes: {
-      type: String,
-      default: null,
-    },
+const paymentSchema = new mongoose.Schema({
+  studentId: {
+    type: mongoose.Schema.Types.ObjectId, ref: 'Student',
+    required: [true, 'Student ID is required'],
   },
-  { timestamps: true }
-);
+  billId: {
+    type: mongoose.Schema.Types.ObjectId, ref: 'StudentBill', default: null,
+  },
+  amount: {
+    type: Number, required: [true, 'Amount is required'], min: [1, 'Amount must be > 0'],
+  },
+  feeType: {
+    type: String, required: [true, 'Fee type is required'],
+    enum: ['tuition','exam','sports','library','development','transport',
+           'hostel','pta','uniform','feeding','ict','other'],
+  },
+  term:    { type: String, required: true, enum: ['first','second','third'] },
+  session: { type: String, required: true, trim: true },
+  status: {
+    type: String,
+    enum: ['pending','paid','failed','cancelled','awaiting_approval'],
+    default: 'pending',
+  },
+  paymentMethod: {
+    type: String,
+    enum: ['paystack','flutterwave','cash','bank_transfer','pos','cheque','scholarship'],
+    default: 'paystack',
+  },
+  reference:     { type: String, unique: true, sparse: true },
+  paystackData:  { type: Object, default: null },
+  receiptNumber: { type: String, unique: true, sparse: true },
+  bankName:       { type: String, default: null },
+  accountName:    { type: String, default: null },
+  transactionRef: { type: String, default: null },
+  requiresApproval: { type: Boolean, default: false },
+  approvedBy:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  approvedAt:       { type: Date, default: null },
+  rejectedReason:   { type: String, default: null },
+  recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  paidAt:     { type: Date, default: null },
+  notes:      { type: String, default: null },
+}, { timestamps: true });
 
 paymentSchema.index({ studentId: 1, term: 1, session: 1 });
 paymentSchema.index({ status: 1 });
+paymentSchema.index({ billId: 1 });
 paymentSchema.index({ reference: 1 });
+paymentSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Payment', paymentSchema);

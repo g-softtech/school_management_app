@@ -1,0 +1,14 @@
+const express    = require('express');
+const router     = express.Router();
+const ctrl       = require('./feeStructure.controller');
+const protect    = require('../../middleware/authMiddleware');
+const restrictTo = require('../../middleware/roleMiddleware');
+router.use(protect);
+router.get('/summary',            ctrl.getSummary);
+router.get('/for-class/:classId', ctrl.getForClass);
+router.get('/',    ctrl.getAll);
+router.get('/:id', ctrl.getOne);
+router.post('/',        restrictTo('admin'), ctrl.create);
+router.patch('/:id',    restrictTo('admin'), ctrl.update);
+router.delete('/:id',   restrictTo('admin'), ctrl.remove);
+module.exports = router;

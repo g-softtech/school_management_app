@@ -1,298 +1,386 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
-import { FiCreditCard, FiDownload, FiExternalLink, FiCheckCircle, FiClock, FiAlertCircle } from 'react-icons/fi';
-import { getStudentPayments, initializePayment, getReceipt } from '../../services/paymentService';
-import { TERMS, SESSIONS, FEE_TYPES } from '../../utils/constants';
-import { formatCurrency, formatDate, getErrorMessage } from '../../utils/helpers';
+import {
+  FiCreditCard, FiCheckCircle, FiClock, FiAlertCircle,
+  FiDownload, FiEye, FiArrowRight, FiFileText,
+} from 'react-icons/fi';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import PageSkeleton from '../../components/common/PageSkeleton';
 import Modal from '../../components/common/Modal';
+import { formatCurrency, formatDateTime, getErrorMessage } from '../../utils/helpers';
+import { TERMS, SESSIONS } from '../../utils/constants';
 
-const STATUS_ICON = {
-  paid:    { icon: FiCheckCircle, color: 'text-green-600', bg: 'bg-green-100' },
-  pending: { icon: FiClock,       color: 'text-amber-600', bg: 'bg-amber-100' },
-  failed:  { icon: FiAlertCircle, color: 'text-red-500',   bg: 'bg-red-100'   },
+const STATUS_CONFIG = {
+  paid:              { label: 'Paid',             color: 'bg-green-100 text-green-700',  icon: FiCheckCircle },
+  pending:           { label: 'Pending',           color: 'bg-secondary-100 text-secondary-500', icon: FiClock },
+  awaiting_approval: { label: 'Awaiting Approval', color: 'bg-amber-100 text-amber-700', icon: FiClock },
+  failed:            { label: 'Failed',            color: 'bg-red-100 text-red-600',     icon: FiAlertCircle },
 };
 
+function StatusBadge({ status }) {
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.color}`}>
+      <cfg.icon size={11} /> {cfg.label}
+    </span>
+  );
+}
+
 export default function ParentPayments() {
-  const [child, setChild]         = useState(null);
-  const [payments, setPayments]   = useState([]);
-  const [totalPaid, setTotalPaid] = useState(0);
-  const [loading, setLoading]     = useState(true);
-  const [paying, setPaying]       = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [receipt, setReceipt]     = useState(null);
-  const [showReceipt, setShowReceipt] = useState(false);
-  const [session, setSession]     = useState('2025/2026');
-  const [termFilter, setTermFilter] = useState('');
+  const { user } = useAuth();
+  const [child,      setChild]      = useState(null);
+  const [bills,      setBills]      = useState([]);
+  const [payments,   setPayments]   = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [receipt,    setReceipt]    = useState(null);
+  const [showReceipt,setShowReceipt]= useState(false);
+  const [showPay,    setShowPay]    = useState(false);
+  const [selectedBill, setSelectedBill] = useState(null);
+  const [payAmount,    setPayAmount]    = useState('');
+  const [paying,       setPaying]       = useState(false);
+  const [filterSession,setFilterSession]= useState('2025/2026');
+  const [filterTerm,   setFilterTerm]   = useState('');
 
-  const [form, setForm] = useState({
-    amount: '', feeType: 'tuition', term: 'first', session: '2025/2026', notes: '',
-  });
-
-  const load = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      // Get child profile
       const childRes = await api.get('/students/my-child');
-      const c = childRes.data.data;
-      setChild(c);
-      const params = { session, limit: 50 };
-      if (termFilter) params.term = termFilter;
-      const res = await getStudentPayments(c._id, params);
-      setPayments(res.data.data || []);
-      setTotalPaid(res.data.totalAmountPaid || 0);
+      const childData = childRes.data.data;
+      setChild(childData);
+
+      if (childData?._id) {
+        const [billRes, payRes] = await Promise.all([
+          api.get(`/bills/student/${childData._id}`, {
+            params: { session: filterSession, term: filterTerm || undefined },
+          }),
+          api.get(`/payments/student/${childData._id}`, {
+            params: { session: filterSession, term: filterTerm || undefined, limit: 50 },
+          }),
+        ]);
+        setBills(billRes.data.data || []);
+        setPayments(payRes.data.data || []);
+      }
     } catch (err) {
       toast.error(getErrorMessage(err));
-    } finally { setLoading(false); }
-  }, [session, termFilter]);
+    } finally {
+      setLoading(false);
+    }
+  }, [filterSession, filterTerm]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  const handlePay = async () => {
-    if (!child) return;
-    if (!form.amount || Number(form.amount) < 1) { toast.error('Enter a valid amount'); return; }
-    setPaying(true);
-    try {
-      const res = await initializePayment({
-        studentId: child._id,
-        amount:    Number(form.amount),
-        feeType:   form.feeType,
-        term:      form.term,
-        session:   form.session,
-        notes:     form.notes || undefined,
-      });
-      const { authorizationUrl } = res.data.data;
-      toast.success('Redirecting to Paystack…');
-      setShowModal(false);
-      window.open(authorizationUrl, '_blank');
-      // Reload after short delay to pick up webhook-updated status
-      setTimeout(load, 5000);
-    } catch (err) {
-      toast.error(getErrorMessage(err));
-    } finally { setPaying(false); }
+  const openPayModal = (bill) => {
+    setSelectedBill(bill);
+    setPayAmount(String(bill.totalBalance));
+    setShowPay(true);
   };
 
-  const handleViewReceipt = async (paymentId) => {
+  const handlePayOnline = async () => {
+    if (!selectedBill || !payAmount || Number(payAmount) <= 0) {
+      toast.error('Enter a valid amount'); return;
+    }
+    if (Number(payAmount) > selectedBill.totalBalance) {
+      toast.error('Amount cannot exceed the outstanding balance'); return;
+    }
+    setPaying(true);
     try {
-      const res = await getReceipt(paymentId);
-      setReceipt(res.data.receipt);
-      setShowReceipt(true);
+      // Get the primary unpaid fee type from the bill
+      const firstUnpaidItem = selectedBill.items?.find(i => i.status !== 'paid' && i.status !== 'waived');
+      const feeType = firstUnpaidItem?.feeType || 'tuition';
+
+      const res = await api.post('/payments/initialize', {
+        studentId:   child._id,
+        amount:      Number(payAmount),
+        feeType,
+        term:        selectedBill.term,
+        session:     selectedBill.session,
+        billId:      selectedBill._id,
+      });
+
+      // Redirect to Paystack
+      if (res.data.data?.authorizationUrl) {
+        window.location.href = res.data.data.authorizationUrl;
+      }
     } catch (err) {
       toast.error(getErrorMessage(err));
+    } finally {
+      setPaying(false);
     }
   };
 
-  const handlePrintReceipt = () => {
-    if (!receipt) return;
-    const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html><head><title>Payment Receipt</title>
-      <style>
-        body{font-family:Arial,sans-serif;max-width:500px;margin:40px auto;padding:24px;color:#111;border:1px solid #ddd;border-radius:8px}
-        h2{text-align:center;color:#C9A227;margin-bottom:4px}
-        .sub{text-align:center;color:#6b7280;font-size:13px;margin-bottom:20px}
-        .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:13px}
-        .label{color:#6b7280}.value{font-weight:600}
-        .total{font-size:18px;color:#C9A227;font-weight:bold;text-align:center;margin-top:16px}
-        .status{text-align:center;margin:8px 0;font-size:12px;color:#15803d;background:#dcfce7;padding:4px 12px;border-radius:20px;display:inline-block}
-      </style></head><body>
-      <h2>SmartSchool</h2>
-      <p class="sub">Payment Receipt</p>
-      <div style="text-align:center;margin-bottom:16px"><span class="status">✓ PAID</span></div>
-      <div class="row"><span class="label">Receipt No.</span><span class="value">${receipt.receiptNumber || '—'}</span></div>
-      <div class="row"><span class="label">Student</span><span class="value">${receipt.studentName}</span></div>
-      <div class="row"><span class="label">Admission No.</span><span class="value">${receipt.admissionNumber}</span></div>
-      <div class="row"><span class="label">Fee Type</span><span class="value" style="text-transform:capitalize">${receipt.feeType}</span></div>
-      <div class="row"><span class="label">Term</span><span class="value" style="text-transform:capitalize">${receipt.term} Term</span></div>
-      <div class="row"><span class="label">Session</span><span class="value">${receipt.session}</span></div>
-      <div class="row"><span class="label">Method</span><span class="value" style="text-transform:capitalize">${receipt.paymentMethod}</span></div>
-      <div class="row"><span class="label">Reference</span><span class="value">${receipt.reference}</span></div>
-      <div class="row"><span class="label">Date Paid</span><span class="value">${new Date(receipt.paidAt).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}</span></div>
-      <p class="total">₦${Number(receipt.amount).toLocaleString('en-NG')}</p>
-      ${receipt.notes ? `<p style="text-align:center;font-size:12px;color:#6b7280;margin-top:8px">Note: ${receipt.notes}</p>` : ''}
-      </body></html>`);
-    win.document.close();
-    win.print();
+  const openReceipt = async (payment) => {
+    try {
+      const res = await api.get(`/payments/${payment._id}/receipt`);
+      setReceipt(res.data.receipt);
+      setShowReceipt(true);
+    } catch (err) { toast.error(getErrorMessage(err)); }
   };
 
-  const paidAmount  = payments.filter((p) => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
-  const pendingCount = payments.filter((p) => p.status === 'pending').length;
+  const printReceipt = () => {
+    if (!receipt) return;
+    const w = window.open('', '_blank', 'width=600,height=700');
+    w.document.write(`<!DOCTYPE html><html><head>
+      <title>Receipt ${receipt.receiptNumber}</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:32px;max-width:480px;margin:0 auto}
+        .header{text-align:center;border-bottom:2px solid #C9A227;padding-bottom:12px;margin-bottom:16px}
+        .logo{font-size:22px;font-weight:800;color:#1F2937}
+        .amount{font-size:28px;font-weight:800;color:#15803d;text-align:center;margin:20px 0}
+        table{width:100%;border-collapse:collapse;margin-top:16px}
+        td{padding:8px 4px;border-bottom:1px solid #f3f4f6;font-size:13px}
+        td:first-child{color:#6b7280}td:last-child{font-weight:600;text-align:right}
+        .badge{display:inline-block;background:#C9A227;color:white;padding:3px 12px;border-radius:20px;font-size:11px}
+        .footer{text-align:center;font-size:11px;color:#9ca3af;margin-top:20px;border-top:1px solid #e5e7eb;padding-top:12px}
+        .no-print{text-align:center;margin-bottom:16px}
+        .btn{padding:8px 24px;background:#C9A227;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px}
+        @media print{.no-print{display:none}}
+      </style></head><body>
+      <div class="no-print"><button class="btn" onclick="window.print()">🖨️ Print</button></div>
+      <div class="header"><div class="logo">SmartSchool</div><div style="font-size:12px;color:#6b7280">Official Payment Receipt</div></div>
+      <div style="text-align:center;margin-bottom:12px"><span class="badge">✓ PAYMENT CONFIRMED</span></div>
+      <div class="amount">₦${Number(receipt.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}</div>
+      <table>
+        <tr><td>Receipt No.</td><td>${receipt.receiptNumber}</td></tr>
+        <tr><td>Student</td><td>${receipt.studentName}</td></tr>
+        <tr><td>Fee Type</td><td style="text-transform:capitalize">${receipt.feeType}</td></tr>
+        <tr><td>Term</td><td style="text-transform:capitalize">${receipt.term} Term</td></tr>
+        <tr><td>Session</td><td>${receipt.session}</td></tr>
+        <tr><td>Method</td><td style="text-transform:capitalize">${(receipt.paymentMethod||'').replace('_',' ')}</td></tr>
+        <tr><td>Date</td><td>${receipt.paidAt ? new Date(receipt.paidAt).toLocaleString('en-GB') : '—'}</td></tr>
+      </table>
+      <div class="footer"><p>Keep this receipt for your records.</p><p>SmartSchool Management System</p></div>
+    </body></html>`);
+    w.document.close(); w.focus();
+  };
+
+  if (loading) return <PageSkeleton type="dashboard" statCols={3} showCharts={false} />;
+  if (!child)  return (
+    <div className="card text-center py-16 text-secondary-400">
+      <FiCreditCard size={36} className="mx-auto mb-3 opacity-40" />
+      <p className="font-medium">No child profile linked</p>
+      <p className="text-xs mt-1">Contact admin to link your child's account</p>
+    </div>
+  );
+
+  const totalBilled  = bills.reduce((s, b) => s + b.totalAmount,  0);
+  const totalPaid    = bills.reduce((s, b) => s + b.totalPaid,    0);
+  const totalBalance = bills.reduce((s, b) => s + b.totalBalance, 0);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="page-title">Fee Payments</h1>
-          <p className="page-subtitle">{child ? `Payment history for ${child.userId?.name}` : 'Track school fees'}</p>
+      <div>
+        <h1 className="page-title flex items-center gap-2">
+          <FiCreditCard className="text-primary-500" size={22} /> Fee Payments
+        </h1>
+        <p className="page-subtitle">
+          {child.userId?.name} · {child.classId?.name} {child.classId?.section} · {child.admissionNumber}
+        </p>
+      </div>
+
+      {/* Balance summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="card text-center border-2 border-secondary-100">
+          <p className="text-xs text-secondary-500 mb-1">Total Billed</p>
+          <p className="text-2xl font-bold text-secondary-800">{formatCurrency(totalBilled)}</p>
         </div>
-        <button onClick={() => setShowModal(true)} disabled={!child} className="btn-primary flex items-center gap-2">
-          <FiCreditCard size={15} /> Make Payment
-        </button>
+        <div className="card text-center border-2 border-green-100">
+          <p className="text-xs text-green-600 mb-1">Amount Paid</p>
+          <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
+        </div>
+        <div className={`card text-center border-2 ${totalBalance > 0 ? 'border-red-100' : 'border-green-100'}`}>
+          <p className={`text-xs mb-1 ${totalBalance > 0 ? 'text-red-500' : 'text-green-600'}`}>
+            {totalBalance > 0 ? 'Outstanding Balance' : 'All Paid ✓'}
+          </p>
+          <p className={`text-2xl font-bold ${totalBalance > 0 ? 'text-red-500' : 'text-green-600'}`}>
+            {formatCurrency(totalBalance)}
+          </p>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="card p-4 flex flex-wrap gap-3">
-        <select value={session} onChange={(e) => { setSession(e.target.value); }} className="input-field py-1.5 text-sm w-32">
-          {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+      <div className="flex gap-3 flex-wrap">
+        <select value={filterSession} onChange={e => setFilterSession(e.target.value)} className="input-field py-1.5 text-sm w-32">
+          {SESSIONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={termFilter} onChange={(e) => setTermFilter(e.target.value)} className="input-field py-1.5 text-sm w-36">
+        <select value={filterTerm} onChange={e => setFilterTerm(e.target.value)} className="input-field py-1.5 text-sm w-32">
           <option value="">All Terms</option>
-          {TERMS.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)} Term</option>)}
+          {TERMS.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)} Term</option>)}
         </select>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="card text-center bg-green-50 border border-green-100">
-          <p className="text-xs text-green-600 font-medium">Total Paid</p>
-          <p className="text-2xl font-bold text-green-700 mt-1">{formatCurrency(paidAmount)}</p>
-        </div>
-        <div className="card text-center">
-          <p className="text-xs text-secondary-500">Total Transactions</p>
-          <p className="text-2xl font-bold text-secondary-800 mt-1">{payments.length}</p>
-        </div>
-        <div className={`card text-center ${pendingCount > 0 ? 'bg-amber-50 border border-amber-100' : ''}`}>
-          <p className={`text-xs font-medium ${pendingCount > 0 ? 'text-amber-600' : 'text-secondary-500'}`}>Pending</p>
-          <p className={`text-2xl font-bold mt-1 ${pendingCount > 0 ? 'text-amber-700' : 'text-secondary-800'}`}>{pendingCount}</p>
-        </div>
-      </div>
+      {/* Bills */}
+      {bills.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="section-title">Fee Invoices</h2>
+          {bills.map(bill => (
+            <div key={bill._id} className={`card border-2 ${
+              bill.status === 'paid'    ? 'border-green-100'    :
+              bill.status === 'partial' ? 'border-amber-100'    :
+              'border-red-100'
+            }`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-secondary-800 capitalize">
+                      {bill.term} Term — {bill.session}
+                    </p>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${
+                      bill.status === 'paid'    ? 'bg-green-100 text-green-700'  :
+                      bill.status === 'partial' ? 'bg-amber-100 text-amber-700'  :
+                      'bg-red-100 text-red-600'
+                    }`}>{bill.status}</span>
+                  </div>
+                  <div className="flex gap-4 mt-2 text-sm flex-wrap">
+                    <span className="text-secondary-500">Billed: <strong className="text-secondary-800">{formatCurrency(bill.totalAmount)}</strong></span>
+                    <span className="text-green-600">Paid: <strong>{formatCurrency(bill.totalPaid)}</strong></span>
+                    {bill.totalBalance > 0 && (
+                      <span className="text-red-500">Balance: <strong>{formatCurrency(bill.totalBalance)}</strong></span>
+                    )}
+                  </div>
 
-      {/* Payment list */}
-      <div className="card overflow-hidden p-0">
-        {loading ? (
-          <div className="p-6 space-y-3">
-            {[...Array(5)].map((_, i) => <div key={i} className="h-16 bg-secondary-50 rounded-xl animate-pulse" />)}
-          </div>
-        ) : payments.length === 0 ? (
-          <div className="text-center py-14 text-secondary-400">
-            <FiCreditCard size={32} className="mx-auto mb-3 opacity-40" />
-            <p>No payment records found</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-secondary-50">
-            {payments.map((p) => {
-              const s = STATUS_ICON[p.status] || STATUS_ICON.pending;
-              return (
-                <div key={p._id} className="flex items-center gap-4 px-5 py-4 hover:bg-secondary-50 transition-colors">
-                  <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center flex-shrink-0`}>
-                    <s.icon className={s.color} size={18} />
+                  {/* Fee breakdown */}
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {bill.items?.map(item => (
+                      <span key={item._id} className={`text-xs px-2 py-0.5 rounded-full capitalize ${
+                        item.status === 'paid'   ? 'bg-green-50 text-green-600 line-through'  :
+                        item.status === 'waived' ? 'bg-secondary-100 text-secondary-400 line-through' :
+                        'bg-secondary-100 text-secondary-600'
+                      }`}>
+                        {item.feeName}: {formatCurrency(item.netAmount)}
+                      </span>
+                    ))}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-secondary-800 capitalize">{p.feeType} Fee</p>
-                    <p className="text-sm text-secondary-500 capitalize">{p.term} Term · {p.session}</p>
-                    {p.receiptNumber && <p className="text-xs text-secondary-400">Receipt: {p.receiptNumber}</p>}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="font-bold text-secondary-800">{formatCurrency(p.amount)}</p>
-                    <p className="text-xs text-secondary-400">{formatDate(p.paidAt || p.createdAt)}</p>
-                    <span className={`text-xs font-medium capitalize ${p.status === 'paid' ? 'text-green-600' : p.status === 'pending' ? 'text-amber-600' : 'text-red-500'}`}>
-                      {p.status}
-                    </span>
-                  </div>
-                  {p.status === 'paid' && (
-                    <button onClick={() => handleViewReceipt(p._id)} className="p-2 hover:bg-secondary-100 rounded-lg transition-colors ml-1" title="View receipt">
-                      <FiDownload size={15} className="text-secondary-500" />
-                    </button>
-                  )}
                 </div>
-              );
-            })}
+
+                {bill.totalBalance > 0 && (
+                  <button onClick={() => openPayModal(bill)}
+                    className="btn-primary flex items-center gap-2 text-sm flex-shrink-0">
+                    <FiCreditCard size={14} /> Pay Now
+                    <FiArrowRight size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Payment History */}
+      {payments.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="section-title">Payment History</h2>
+          <div className="card overflow-hidden p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-secondary-50">
+                  {['Date','Fee Type','Amount','Method','Status',''].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-secondary-50">
+                {payments.map(p => (
+                  <tr key={p._id} className="hover:bg-secondary-50">
+                    <td className="px-4 py-3 text-xs text-secondary-500">{formatDateTime(p.paidAt || p.createdAt)}</td>
+                    <td className="px-4 py-3 capitalize text-secondary-700">{p.feeType}</td>
+                    <td className="px-4 py-3 font-bold text-primary-700">{formatCurrency(p.amount)}</td>
+                    <td className="px-4 py-3 text-xs text-secondary-500 capitalize">{(p.paymentMethod||'').replace('_',' ')}</td>
+                    <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
+                    <td className="px-4 py-3">
+                      {p.status === 'paid' && (
+                        <button onClick={() => openReceipt(p)}
+                          className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="View receipt">
+                          <FiEye size={14} className="text-blue-500" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {bills.length === 0 && payments.length === 0 && (
+        <div className="card text-center py-16 text-secondary-400">
+          <FiFileText size={36} className="mx-auto mb-3 opacity-40" />
+          <p className="font-medium">No bills or payments yet</p>
+          <p className="text-xs mt-1">Bills will appear here once the school generates them</p>
+        </div>
+      )}
+
+      {/* Pay Now Modal */}
+      <Modal isOpen={showPay} onClose={() => setShowPay(false)} title="Make Payment" size="sm">
+        {selectedBill && (
+          <div className="space-y-4">
+            <div className="p-3 bg-secondary-50 rounded-xl">
+              <p className="text-xs text-secondary-500">Paying for</p>
+              <p className="font-semibold text-secondary-800 capitalize mt-0.5">
+                {selectedBill.term} Term — {selectedBill.session}
+              </p>
+              <p className="text-xs text-red-500 mt-1">
+                Outstanding balance: {formatCurrency(selectedBill.totalBalance)}
+              </p>
+            </div>
+            <div>
+              <label className="input-label">Amount to Pay (₦)</label>
+              <input type="number" min="1" max={selectedBill.totalBalance}
+                value={payAmount}
+                onChange={e => setPayAmount(e.target.value)}
+                className="input-field text-lg font-bold"
+                placeholder={String(selectedBill.totalBalance)}
+              />
+              <p className="text-xs text-secondary-400 mt-1">
+                You can pay the full amount or a partial instalment
+              </p>
+            </div>
+            <div className="p-3 bg-blue-50 rounded-xl text-xs text-blue-700 space-y-1">
+              <p className="font-semibold">🔒 Secure Payment via Paystack</p>
+              <p>You will be redirected to Paystack to complete your payment securely.</p>
+              <p className="font-semibold mt-1">Test Card: 4084 0840 8408 4081 | PIN: 0000 | OTP: 123456</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowPay(false)} className="btn-secondary flex-1">Cancel</button>
+              <button onClick={handlePayOnline} disabled={paying}
+                className="btn-primary flex-1 flex items-center justify-center gap-2">
+                {paying ? (
+                  <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Redirecting…</>
+                ) : <><FiCreditCard size={14} /> Pay {payAmount ? formatCurrency(Number(payAmount)) : ''}</>}
+              </button>
+            </div>
           </div>
         )}
-      </div>
-
-      {/* Make Payment Modal */}
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Make Payment" size="md">
-        <div className="space-y-4">
-          {child && (
-            <div className="p-3 bg-secondary-50 rounded-xl text-sm">
-              <p className="font-medium text-secondary-800">{child.userId?.name}</p>
-              <p className="text-secondary-500 text-xs">{child.admissionNumber}</p>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="input-label">Fee Type <span className="text-red-500">*</span></label>
-              <select value={form.feeType} onChange={(e) => setForm((p) => ({ ...p, feeType: e.target.value }))} className="input-field capitalize">
-                {FEE_TYPES.map((f) => <option key={f} value={f}>{f}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="input-label">Amount (₦) <span className="text-red-500">*</span></label>
-              <input type="number" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} placeholder="0" min="1" className="input-field" />
-            </div>
-            <div>
-              <label className="input-label">Term <span className="text-red-500">*</span></label>
-              <select value={form.term} onChange={(e) => setForm((p) => ({ ...p, term: e.target.value }))} className="input-field capitalize">
-                {TERMS.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)} Term</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="input-label">Session <span className="text-red-500">*</span></label>
-              <select value={form.session} onChange={(e) => setForm((p) => ({ ...p, session: e.target.value }))} className="input-field">
-                {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="input-label">Notes (optional)</label>
-            <input value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="e.g. First instalment" className="input-field" />
-          </div>
-
-          <div className="p-3 bg-blue-50 rounded-xl text-xs text-blue-700 space-y-2">
-            <p className="font-medium">ℹ️ Paystack Secure Payment</p>
-            <p>You will be redirected to Paystack to complete payment safely.</p>
-            <div className="bg-white border border-blue-200 rounded-lg p-2.5 space-y-1">
-              <p className="font-semibold text-blue-800">🧪 Test Card Details (sandbox only):</p>
-              <p>Card No: <span className="font-mono font-bold">4084 0840 8408 4081</span></p>
-              <p>Expiry: <span className="font-mono">any future date</span> &nbsp; CVV: <span className="font-mono">any 3 digits</span></p>
-              <p>PIN: <span className="font-mono">0000</span> &nbsp; OTP: <span className="font-mono">123456</span></p>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
-            <button onClick={handlePay} disabled={paying} className="btn-primary flex-1 flex items-center justify-center gap-2">
-              <FiExternalLink size={14} />
-              {paying ? 'Initializing…' : 'Pay with Paystack'}
-            </button>
-          </div>
-        </div>
       </Modal>
 
       {/* Receipt Modal */}
-      <Modal isOpen={showReceipt} onClose={() => { setShowReceipt(false); setReceipt(null); }} title="Payment Receipt" size="sm">
+      <Modal isOpen={showReceipt} onClose={() => { setShowReceipt(false); setReceipt(null); }} title="Receipt" size="sm">
         {receipt && (
           <div className="space-y-4">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                <FiCheckCircle className="text-green-600" size={24} />
+            <div className="text-center py-3">
+              <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <FiCheckCircle className="text-green-600" size={28} />
               </div>
-              <p className="font-bold text-secondary-800">Payment Confirmed</p>
-              {receipt.receiptNumber && <p className="text-xs text-secondary-400 mt-0.5">Receipt #{receipt.receiptNumber}</p>}
+              <p className="text-2xl font-bold text-green-600">{formatCurrency(receipt.amount)}</p>
+              <p className="text-xs text-secondary-400">Receipt: {receipt.receiptNumber}</p>
             </div>
-
-            <div className="space-y-2 text-sm">
+            <div className="space-y-2 bg-secondary-50 rounded-xl p-4">
               {[
-                ['Student',    receipt.studentName],
-                ['Admission',  receipt.admissionNumber],
-                ['Fee Type',   receipt.feeType],
-                ['Term',       `${receipt.term} term`],
-                ['Session',    receipt.session],
-                ['Method',     receipt.paymentMethod],
-                ['Reference',  receipt.reference],
-                ['Paid At',    receipt.paidAt ? formatDate(receipt.paidAt) : '—'],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between py-1.5 border-b border-secondary-100">
-                  <span className="text-secondary-500 capitalize">{k}</span>
-                  <span className="font-medium text-secondary-800 capitalize">{v}</span>
+                ['Fee Type', receipt.feeType],
+                ['Term',     `${receipt.term} Term`],
+                ['Session',  receipt.session],
+                ['Method',   (receipt.paymentMethod||'').replace('_',' ')],
+                ['Date',     receipt.paidAt ? new Date(receipt.paidAt).toLocaleDateString('en-GB') : '—'],
+              ].map(([k,v]) => (
+                <div key={k} className="flex justify-between text-sm">
+                  <span className="text-secondary-500">{k}</span>
+                  <span className="font-medium capitalize">{v}</span>
                 </div>
               ))}
-              <div className="flex justify-between py-2">
-                <span className="font-bold text-secondary-700">Amount</span>
-                <span className="font-bold text-green-600 text-lg">{formatCurrency(receipt.amount)}</span>
-              </div>
             </div>
-
-            <button onClick={handlePrintReceipt} className="btn-secondary w-full flex items-center justify-center gap-2">
+            <button onClick={printReceipt} className="btn-primary w-full flex items-center justify-center gap-2">
               <FiDownload size={15} /> Print Receipt
             </button>
           </div>

@@ -1,132 +1,58 @@
 const express    = require('express');
 const router     = express.Router();
-const User       = require('../../models/User');
-const Student    = require('../../models/Student');
-const Subject    = require('../../models/Subject');
-const catchAsync = require('../../utils/catchAsync');
 const protect    = require('../../middleware/authMiddleware');
+const restrictTo = require('../../middleware/roleMiddleware');
+const User       = require('../../models/User');
+const ApiError   = require('../../utils/ApiError');
+const catchAsync = require('../../utils/catchAsync');
 
-/**
- * GET /api/users/directory
- * Returns messageable users scoped by the caller's role and class relationships.
- *
- * SCOPING RULES:
- *   admin   → all teachers, all students (via User), all parents
- *   teacher → students in their assigned classes + parents of those students + admins
- *   student → teachers assigned to their class + admins
- *   parent  → teachers assigned to their child's class + admins
- *
- * Query params:
- *   ?search=emeka   — filter by name (case-insensitive)
- *   ?limit=50
- */
-router.get('/directory', protect, catchAsync(async function(req, res) {
-  var me     = req.user;
-  var search = req.query.search || '';
-  var limit  = Math.min(Number(req.query.limit) || 60, 100);
+router.use(protect);
 
-  var nameFilter = search ? { name: { $regex: search, $options: 'i' } } : {};
-  var users = [];
-
-  // ── ADMIN → everyone (or filtered by ?role=) ───────────────────────────
+// Directory — for dropdowns (teachers list etc)
+router.get('/directory', catchAsync(async (req, res) => {
+  const { role, search, limit = 200 } = req.query;
+  const filter = { isActive: { $ne: false } };
+  const me = req.user;
   if (me.role === 'admin') {
-    var roleFilter = req.query.role
-      ? { role: req.query.role }
-      : { role: { $in: ['admin', 'teacher', 'student', 'parent'] } };
-    users = await User.find({
-      _id: { $ne: me._id },
-      ...roleFilter,
-      ...nameFilter,
-    }, 'name email role').sort({ name: 1 }).limit(limit);
+    if (role) filter.role = role;
+    else      filter.role = { $in: ['admin','teacher','student','parent'] };
+  } else if (me.role === 'teacher') {
+    filter.role = { $in: ['student','teacher'] };
+  } else {
+    filter._id = me._id;
   }
+  if (search) filter.name = { $regex: search, $options: 'i' };
+  const users = await User.find(filter, 'name email role').sort({ name: 1 }).limit(Number(limit));
+  res.json({ success: true, data: users });
+}));
 
-  // ── TEACHER → students & parents in their classes + admins ───────────────
-  else if (me.role === 'teacher') {
-    // Find all classes this teacher teaches (via Subject model)
-    var teacherSubjects = await Subject.find({ teacherId: me._id }).distinct('classId');
+// Admin: list users by role
+router.get('/', restrictTo('admin'), catchAsync(async (req, res) => {
+  const { role, page = 1, limit = 15, search } = req.query;
+  const filter = {};
+  if (role)   filter.role = role;
+  if (search) filter.name = { $regex: search, $options: 'i' };
+  const total = await User.countDocuments(filter);
+  const users = await User.find(filter, '-password').sort({ name: 1 }).skip((Number(page)-1)*Number(limit)).limit(Number(limit));
+  res.json({ success: true, pagination: { total, page: Number(page), pages: Math.ceil(total/Number(limit)) }, data: users });
+}));
 
-    // Get student User IDs in those classes
-    var studentsInClass = await Student.find(
-      { classId: { $in: teacherSubjects } },
-      'userId parentId'
-    );
+// Admin: update user
+router.patch('/:id', restrictTo('admin'), catchAsync(async (req, res, next) => {
+  const allowed = ['name','phone','qualification','isActive','password'];
+  const updates = {};
+  allowed.forEach(k => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
+  if (updates.password) { const bcrypt = require('bcryptjs'); updates.password = await bcrypt.hash(updates.password, 12); }
+  const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, select: '-password' });
+  if (!user) return next(new ApiError(404, 'User not found'));
+  res.json({ success: true, data: user });
+}));
 
-    var studentUserIds = studentsInClass.map(function(s) { return s.userId; });
-    var parentUserIds  = studentsInClass
-      .filter(function(s) { return s.parentId; })
-      .map(function(s) { return s.parentId; });
-
-    var adminIds = await User.find({ role: 'admin' }, '_id');
-    var allowedIds = [
-      ...studentUserIds,
-      ...parentUserIds,
-      ...adminIds.map(function(a) { return a._id; }),
-    ];
-
-    users = await User.find({
-      _id: { $in: allowedIds, $ne: me._id },
-      ...nameFilter,
-    }, 'name email role').sort({ role: 1, name: 1 }).limit(limit);
-  }
-
-  // ── STUDENT → teachers of their class + admins ───────────────────────────
-  else if (me.role === 'student') {
-    // Find this student's class
-    var myStudent = await Student.findOne({ userId: me._id });
-
-    var teacherUserIds = [];
-    if (myStudent && myStudent.classId) {
-      // Get teacher User IDs from subjects in their class
-      var classSubjects = await Subject.find(
-        { classId: myStudent.classId, teacherId: { $ne: null } },
-        'teacherId'
-      );
-      teacherUserIds = classSubjects.map(function(s) { return s.teacherId; });
-    }
-
-    var admins = await User.find({ role: 'admin' }, '_id');
-    var allowedIds = [
-      ...teacherUserIds,
-      ...admins.map(function(a) { return a._id; }),
-    ];
-
-    users = await User.find({
-      _id: { $in: allowedIds, $ne: me._id },
-      ...nameFilter,
-    }, 'name email role').sort({ role: 1, name: 1 }).limit(limit);
-  }
-
-  // ── PARENT → teachers of their child's class + admins ────────────────────
-  else if (me.role === 'parent') {
-    // Find the child linked to this parent
-    var myChild = await Student.findOne({ parentId: me._id });
-
-    var childTeacherIds = [];
-    if (myChild && myChild.classId) {
-      var childSubjects = await Subject.find(
-        { classId: myChild.classId, teacherId: { $ne: null } },
-        'teacherId'
-      );
-      childTeacherIds = childSubjects.map(function(s) { return s.teacherId; });
-    }
-
-    var adminUsers = await User.find({ role: 'admin' }, '_id');
-    var allowedIds = [
-      ...childTeacherIds,
-      ...adminUsers.map(function(a) { return a._id; }),
-    ];
-
-    users = await User.find({
-      _id: { $in: allowedIds, $ne: me._id },
-      ...nameFilter,
-    }, 'name email role').sort({ role: 1, name: 1 }).limit(limit);
-  }
-
-  res.status(200).json({
-    success: true,
-    count:   users.length,
-    data:    users,
-  });
+// Admin: delete user
+router.delete('/:id', restrictTo('admin'), catchAsync(async (req, res, next) => {
+  const user = await User.findByIdAndDelete(req.params.id);
+  if (!user) return next(new ApiError(404, 'User not found'));
+  res.json({ success: true, message: 'User deleted' });
 }));
 
 module.exports = router;
