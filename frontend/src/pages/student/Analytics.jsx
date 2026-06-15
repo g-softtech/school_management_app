@@ -70,7 +70,7 @@ export default function StudentAnalytics() {
 
       {/* Overview stat tiles */}
       {data?.overall ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <StatTile label="Overall Avg"  value={`${data.overall.averageScore}%`}   color="text-blue-600"    icon={FiTrendingUp} />
           <StatTile label="Highest"      value={data.overall.highestScore}          color="text-green-600"   icon={FiStar}       />
           <StatTile label="Lowest"       value={data.overall.lowestScore}           color="text-red-500"     icon={FiAlertCircle}/>
@@ -128,7 +128,7 @@ export default function StudentAnalytics() {
             'score-trend'
           )}
         >
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={280} >
             <LineChart data={termTrendData} margin={{ left: -20, right: 10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-20} textAnchor="end" />
@@ -148,7 +148,7 @@ export default function StudentAnalytics() {
           isEmpty={radarData.length === 0}
           emptyMessage="No subject data yet"
         >
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={280} >
             <RadarChart data={radarData}>
               <PolarGrid stroke="#e2e8f0" />
               <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
@@ -171,7 +171,7 @@ export default function StudentAnalytics() {
             'subject-averages'
           )}
         >
-          <ResponsiveContainer width="100%" height={230}>
+          <ResponsiveContainer width="100%" height={280} >
             <BarChart data={barData} margin={{ left: -20, right: 10, bottom: 45 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" interval={0} />

@@ -71,7 +71,7 @@ export default function AdminAnalytics() {
       </div>
 
       {/* Stat tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile label="Pass Rate"     value={`${school?.academic?.passRate ?? 0}%`}        icon={FiAward}     color="text-green-600"   bg="bg-green-50"   />
         <StatTile label="Average Score" value={`${school?.academic?.averageScore ?? 0}`}      icon={FiTrendingUp} color="text-blue-600"    bg="bg-blue-50"    />
         <StatTile label="Total Students" value={school?.counts?.students ?? 0}                icon={FiUsers}     color="text-purple-600"  bg="bg-purple-50"  />
@@ -86,7 +86,7 @@ export default function AdminAnalytics() {
           isEmpty={subjectData.length === 0}
           onExport={() => exportCSV(subjectData.map((s) => ({ Subject: s.subjectName, 'Avg Score': s.avgScore })), 'subject-performance')}
         >
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={280} >
             <BarChart data={subjectData.slice(0, 8)} margin={{ top: 5, right: 10, left: -20, bottom: 45 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis dataKey="subjectName" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" interval={0} />
@@ -103,7 +103,7 @@ export default function AdminAnalytics() {
           isEmpty={gradeData.length === 0}
           onExport={() => exportCSV(gradeData.map((g) => ({ Grade: g._id, Count: g.count })), 'grade-distribution')}
         >
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={280} >
             <BarChart data={gradeData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis dataKey="_id" tick={{ fontSize: 11 }} />
@@ -128,7 +128,7 @@ export default function AdminAnalytics() {
           emptyMessage="No payment data yet"
           onExport={() => exportCSV(feeTypeData.map((f) => ({ 'Fee Type': f._id, Total: f.total })), 'revenue-by-type')}
         >
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={280} >
             <PieChart>
               <Pie
                 data={feeTypeData}
@@ -157,7 +157,7 @@ export default function AdminAnalytics() {
           emptyMessage="No payment data yet"
           onExport={() => exportCSV(termRevData.map((t) => ({ Term: t._id, Revenue: t.total })), 'revenue-by-term')}
         >
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={280} >
             <BarChart data={termRevData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis dataKey="_id" tick={{ fontSize: 11 }} />
@@ -176,7 +176,7 @@ export default function AdminAnalytics() {
           subtitle="Average scores across all classes"
           onExport={() => exportCSV(school.classPerformance.map((c) => ({ Class: c.className, 'Avg Score': c.avgScore, 'Pass Rate': `${c.passRate}%` })), 'class-comparison')}
         >
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={280} >
             <BarChart data={school.classPerformance} margin={{ top: 5, right: 10, left: -10, bottom: 30 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis dataKey="className" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" />

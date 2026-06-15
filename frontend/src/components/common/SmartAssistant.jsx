@@ -141,7 +141,7 @@ export default function SmartAssistant() {
       {open && (
         <div
           className={`fixed z-40 bottom-6 right-6 bg-white rounded-2xl shadow-2xl border border-secondary-100 flex flex-col transition-all duration-200 ${
-            expanded ? 'w-[480px] h-[600px]' : 'w-80 h-[460px]'
+            expanded ? 'w-full max-w-full h-[600px]' : 'w-80 h-[460px]'
           }`}
         >
           {/* Header */}
@@ -179,7 +179,7 @@ export default function SmartAssistant() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-3">
+          <div className="flex-1 min-w-0 overflow-y-auto px-4 py-3">
             {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
 
             {/* Loading dots */}
@@ -228,7 +228,7 @@ export default function SmartAssistant() {
               onKeyDown={handleKeyDown}
               placeholder="Ask me anything…"
               rows={1}
-              className="input-field flex-1 py-2 text-sm resize-none overflow-hidden min-h-[36px] max-h-24"
+              className="input-field flex-1 min-w-0 py-2 text-sm resize-none overflow-hidden min-h-[36px] max-h-24"
               style={{ height: 'auto' }}
               onInput={(e) => {
                 e.target.style.height = 'auto';

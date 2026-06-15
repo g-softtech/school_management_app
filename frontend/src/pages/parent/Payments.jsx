@@ -8,6 +8,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import PageSkeleton from '../../components/common/PageSkeleton';
 import Modal from '../../components/common/Modal';
+import Table from '../../components/common/Table';
 import { formatCurrency, formatDateTime, getErrorMessage } from '../../utils/helpers';
 import { TERMS, SESSIONS } from '../../utils/constants';
 
@@ -141,7 +142,7 @@ export default function ParentPayments() {
       <div class="header"><div class="logo">SmartSchool</div><div style="font-size:12px;color:#6b7280">Official Payment Receipt</div></div>
       <div style="text-align:center;margin-bottom:12px"><span class="badge">✓ PAYMENT CONFIRMED</span></div>
       <div class="amount">₦${Number(receipt.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}</div>
-      <table>
+      <div className="overflow-x-auto w-full max-w-full"><table>
         <tr><td>Receipt No.</td><td>${receipt.receiptNumber}</td></tr>
         <tr><td>Student</td><td>${receipt.studentName}</td></tr>
         <tr><td>Fee Type</td><td style="text-transform:capitalize">${receipt.feeType}</td></tr>
@@ -149,7 +150,7 @@ export default function ParentPayments() {
         <tr><td>Session</td><td>${receipt.session}</td></tr>
         <tr><td>Method</td><td style="text-transform:capitalize">${(receipt.paymentMethod||'').replace('_',' ')}</td></tr>
         <tr><td>Date</td><td>${receipt.paidAt ? new Date(receipt.paidAt).toLocaleString('en-GB') : '—'}</td></tr>
-      </table>
+      </table></div>
       <div class="footer"><p>Keep this receipt for your records.</p><p>SmartSchool Management System</p></div>
     </body></html>`);
     w.document.close(); w.focus();
@@ -272,34 +273,27 @@ export default function ParentPayments() {
         <div className="space-y-3">
           <h2 className="section-title">Payment History</h2>
           <div className="card overflow-hidden p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-secondary-50">
-                  {['Date','Fee Type','Amount','Method','Status',''].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-secondary-50">
-                {payments.map(p => (
-                  <tr key={p._id} className="hover:bg-secondary-50">
-                    <td className="px-4 py-3 text-xs text-secondary-500">{formatDateTime(p.paidAt || p.createdAt)}</td>
-                    <td className="px-4 py-3 capitalize text-secondary-700">{p.feeType}</td>
-                    <td className="px-4 py-3 font-bold text-primary-700">{formatCurrency(p.amount)}</td>
-                    <td className="px-4 py-3 text-xs text-secondary-500 capitalize">{(p.paymentMethod||'').replace('_',' ')}</td>
-                    <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
-                    <td className="px-4 py-3">
-                      {p.status === 'paid' && (
+            <Table
+              columns={[
+                { key: 'date', label: 'Date', render: (_, p) => <span className="text-xs text-secondary-500">{formatDateTime(p.paidAt || p.createdAt)}</span> },
+                { key: 'feeType', label: 'Fee Type', render: (val) => <span className="capitalize text-secondary-700">{val}</span> },
+                { key: 'amount', label: 'Amount', render: (val) => <span className="font-bold text-primary-700">{formatCurrency(val)}</span> },
+                { key: 'method', label: 'Method', render: (_, p) => <span className="text-xs text-secondary-500 capitalize">{(p.paymentMethod||'').replace('_',' ')}</span> },
+                { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val} /> },
+                { key: 'actions', label: '', render: (_, p) => (
+                    p.status === 'paid' && (
+                      <div className="flex items-center gap-1 justify-end">
                         <button onClick={() => openReceipt(p)}
                           className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="View receipt">
                           <FiEye size={14} className="text-blue-500" />
                         </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </div>
+                    )
+                  )
+                }
+              ]}
+              data={payments}
+            />
           </div>
         </div>
       )}
@@ -343,9 +337,9 @@ export default function ParentPayments() {
               <p className="font-semibold mt-1">Test Card: 4084 0840 8408 4081 | PIN: 0000 | OTP: 123456</p>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setShowPay(false)} className="btn-secondary flex-1">Cancel</button>
+              <button onClick={() => setShowPay(false)} className="btn-secondary flex-1 min-w-0">Cancel</button>
               <button onClick={handlePayOnline} disabled={paying}
-                className="btn-primary flex-1 flex items-center justify-center gap-2">
+                className="btn-primary flex-1 min-w-0 flex items-center justify-center gap-2">
                 {paying ? (
                   <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Redirecting…</>
                 ) : <><FiCreditCard size={14} /> Pay {payAmount ? formatCurrency(Number(payAmount)) : ''}</>}

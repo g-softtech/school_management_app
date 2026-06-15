@@ -183,13 +183,13 @@ export default function ChangePassword() {
             </div>
 
             <div className="flex gap-3 pt-1">
-              <button type="button" onClick={handleCancel} className="btn-secondary flex-1">
+              <button type="button" onClick={handleCancel} className="btn-secondary flex-1 min-w-0">
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading || form.newPassword !== form.confirmPassword || form.newPassword.length < 8}
-                className="btn-primary flex-1 disabled:opacity-50"
+                className="btn-primary flex-1 min-w-0 disabled:opacity-50"
               >
                 {loading ? (
                   <span className="flex items-center gap-2 justify-center">

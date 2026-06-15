@@ -107,7 +107,7 @@ export default function Sidebar({ isOpen, onClose }) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
+        <nav className="flex-1 min-w-0 overflow-y-auto py-4 px-3 space-y-0.5">
           {navItems.map((item) => (
             <NavLink
               key={item.to}

@@ -7,6 +7,7 @@ import {
 import api from '../../services/api';
 import Modal from '../../components/common/Modal';
 import PageSkeleton from '../../components/common/PageSkeleton';
+import Table from '../../components/common/Table';
 import { formatDate, getErrorMessage } from '../../utils/helpers';
 
 const STATUS_CONFIG = {
@@ -128,7 +129,7 @@ export default function AdminAdmissions() {
       {mainTab === 'applications' && (
         <>
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-4">
             {[
               { label: 'Total',    value: stats.total    || 0, color: 'text-secondary-800' },
               { label: 'Pending',  value: stats.pending  || 0, color: 'text-amber-600'     },
@@ -144,7 +145,7 @@ export default function AdminAdmissions() {
 
           {/* Filters */}
           <div className="card p-4 flex flex-wrap gap-3">
-            <div className="relative flex-1 min-w-48">
+            <div className="relative flex-1 min-w-0 min-w-48">
               <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
               <input value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Search by name or email…" className="input-field pl-9 py-1.5 text-sm w-full" />
@@ -170,43 +171,38 @@ export default function AdminAdmissions() {
                   <p className="font-medium">No applications found</p>
                 </div>
               ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-secondary-50">
-                      {['Student','Class','Parent','Contact','Applied','Status',''].map(h => (
-                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-secondary-50">
-                    {filtered.map(app => {
-                      const sc = STATUS_CONFIG[app.status] || STATUS_CONFIG.pending;
-                      return (
-                        <tr key={app._id} className="hover:bg-secondary-50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-secondary-800">{app.fullName}</td>
-                          <td className="px-4 py-3 text-secondary-600">{app.applyingFor}</td>
-                          <td className="px-4 py-3 text-secondary-600">{app.parentName}</td>
-                          <td className="px-4 py-3">
-                            <p className="text-xs text-secondary-600">{app.email}</p>
-                            <p className="text-xs text-secondary-400">{app.phone}</p>
-                          </td>
-                          <td className="px-4 py-3 text-xs text-secondary-400">{formatDate(app.createdAt)}</td>
-                          <td className="px-4 py-3">
-                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 w-fit ${sc.color}`}>
-                              <sc.icon size={11} /> {sc.label}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <button onClick={() => openApplication(app)}
-                              className="text-xs text-primary-600 hover:underline font-medium">
-                              Review
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <Table
+                  columns={[
+                    { key: 'fullName', label: 'Student', render: (val) => <span className="font-medium text-secondary-800">{val}</span> },
+                    { key: 'applyingFor', label: 'Class', render: (val) => <span className="text-secondary-600">{val}</span> },
+                    { key: 'parentName', label: 'Parent', render: (val) => <span className="text-secondary-600">{val}</span> },
+                    { key: 'contact', label: 'Contact', render: (_, app) => (
+                        <>
+                          <p className="text-xs text-secondary-600">{app.email}</p>
+                          <p className="text-xs text-secondary-400">{app.phone}</p>
+                        </>
+                      )
+                    },
+                    { key: 'createdAt', label: 'Applied', render: (val) => <span className="text-xs text-secondary-400">{formatDate(val)}</span> },
+                    { key: 'status', label: 'Status', render: (val) => {
+                        const sc = STATUS_CONFIG[val] || STATUS_CONFIG.pending;
+                        return (
+                          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 w-fit ${sc.color}`}>
+                            <sc.icon size={11} /> {sc.label}
+                          </span>
+                        );
+                      }
+                    },
+                    { key: 'actions', label: '', render: (_, app) => (
+                        <button onClick={() => openApplication(app)}
+                          className="text-xs text-primary-600 hover:underline font-medium">
+                          Review
+                        </button>
+                      )
+                    }
+                  ]}
+                  data={filtered}
+                />
               )}
             </div>
           )}
@@ -323,7 +319,7 @@ export default function AdminAdmissions() {
             {/* Status update */}
             <div className="border-t border-secondary-100 pt-4 space-y-3">
               <p className="text-xs font-semibold text-secondary-500 uppercase tracking-wide">Update Status</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                   <button key={key} onClick={() => setUpdateForm(f => ({ ...f, status: key }))}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
@@ -343,8 +339,8 @@ export default function AdminAdmissions() {
                   className="input-field resize-none" />
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setSelected(null)} className="btn-secondary flex-1">Cancel</button>
-                <button onClick={handleUpdate} disabled={updating} className="btn-primary flex-1">
+                <button onClick={() => setSelected(null)} className="btn-secondary flex-1 min-w-0">Cancel</button>
+                <button onClick={handleUpdate} disabled={updating} className="btn-primary flex-1 min-w-0">
                   {updating ? 'Saving…' : 'Save Decision'}
                 </button>
               </div>

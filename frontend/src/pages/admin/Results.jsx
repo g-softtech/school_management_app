@@ -379,7 +379,7 @@ export default function AdminResults() {
                   {filteredSummaries.length} student{filteredSummaries.length !== 1 ? 's' : ''} — {term} term · {session}
                 </p>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto w-full max-w-full"><table className="w-full text-sm">
                 <thead>
                   <tr className="bg-secondary-50 border-b border-secondary-100">
                     {['#','Student','Adm. No','Subjects','Average','Passed','Failed'].map(h => (
@@ -400,7 +400,7 @@ export default function AdminResults() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
         </>
@@ -422,7 +422,7 @@ export default function AdminResults() {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="input-label">Term</label>
               <select className="input-field" value={term} onChange={e => setTerm(e.target.value)}>
@@ -467,7 +467,7 @@ export default function AdminResults() {
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-xl border border-secondary-200">
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto w-full max-w-full"><table className="w-full text-sm">
                     <thead>
                       <tr className="bg-secondary-800 text-white">
                         <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase">Subject</th>
@@ -488,7 +488,7 @@ export default function AdminResults() {
                         />
                       ))}
                     </tbody>
-                  </table>
+                  </table></div>
                 </div>
               )}
 
@@ -511,10 +511,10 @@ export default function AdminResults() {
           )}
 
           <div className="flex gap-3 pt-2 border-t border-secondary-100">
-            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
+            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 min-w-0">Cancel</button>
             <button onClick={handleBulkSave}
               disabled={saving || !selectedStudentId || filledCount === 0}
-              className="btn-primary flex-1 justify-center">
+              className="btn-primary flex-1 min-w-0 justify-center">
               {saving ? (
                 <span className="flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />

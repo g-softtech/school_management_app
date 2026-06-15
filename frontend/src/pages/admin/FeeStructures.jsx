@@ -8,6 +8,7 @@ import Modal from '../../components/common/Modal';
 import Badge from '../../components/common/Badge';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PageSkeleton from '../../components/common/PageSkeleton';
+import Table from '../../components/common/Table';
 import {
   getFeeStructures, createFeeStructure,
   updateFeeStructure, deleteFeeStructure, getFeesSummary,
@@ -142,7 +143,7 @@ export default function AdminFeeStructures() {
       </div>
 
       {/* Summary tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <div className="card text-center col-span-2 sm:col-span-1">
           <p className="text-xs text-secondary-500 mb-1">Total Configured</p>
           <p className="text-2xl font-bold text-primary-600">{formatCurrency(grandTotal)}</p>
@@ -159,7 +160,7 @@ export default function AdminFeeStructures() {
 
       {/* Filters */}
       <div className="card p-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-40">
+        <div className="relative flex-1 min-w-0 min-w-40">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search fee name…" className="input-field pl-9 py-1.5 text-sm w-full" />
         </div>
@@ -191,47 +192,45 @@ export default function AdminFeeStructures() {
               <p className="text-xs mt-1">Click "New Fee" to create one</p>
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-secondary-50">
-                  {['Fee Name','Type','Amount','Scope','Term','Frequency','Status',''].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-secondary-50">
-                {filtered.map(fee => (
-                  <tr key={fee._id} className={`hover:bg-secondary-50 transition-colors ${!fee.isActive ? 'opacity-50' : ''}`}>
-                    <td className="px-4 py-3">
+            <Table
+              columns={[
+                { key: 'name', label: 'Fee Name', render: (_, fee) => (
+                    <>
                       <p className="font-medium text-secondary-800">{fee.name}</p>
                       {fee.description && <p className="text-xs text-secondary-400 truncate max-w-48">{fee.description}</p>}
-                    </td>
-                    <td className="px-4 py-3"><FeeTypeBadge type={fee.feeType} /></td>
-                    <td className="px-4 py-3 font-bold text-primary-700">{formatCurrency(fee.amount)}</td>
-                    <td className="px-4 py-3 text-secondary-600 text-xs">
+                    </>
+                  )
+                },
+                { key: 'feeType', label: 'Type', render: (val) => <FeeTypeBadge type={val} /> },
+                { key: 'amount', label: 'Amount', render: (val) => <span className="font-bold text-primary-700">{formatCurrency(val)}</span> },
+                { key: 'scope', label: 'Scope', render: (_, fee) => (
+                    <span className="text-secondary-600 text-xs">
                       {fee.scope === 'all_classes'      ? 'All Classes' : null}
                       {fee.scope === 'specific_class'   ? `${fee.classId?.name} ${fee.classId?.section||''}` : null}
                       {fee.scope === 'specific_student' ? `Student: ${fee.studentId?.admissionNumber}` : null}
-                    </td>
-                    <td className="px-4 py-3 text-secondary-600 capitalize text-xs">{fee.term === 'all' ? 'All Terms' : `${fee.term} term`}</td>
-                    <td className="px-4 py-3 text-secondary-600 capitalize text-xs">{(fee.frequency||'').replace('_',' ')}</td>
-                    <td className="px-4 py-3">
-                      <button onClick={() => handleToggle(fee)}
-                        className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg transition-colors ${fee.isActive ? 'text-green-600 bg-green-50' : 'text-secondary-400 bg-secondary-100'}`}>
-                        {fee.isActive ? <FiToggleRight size={14} /> : <FiToggleLeft size={14} />}
-                        {fee.isActive ? 'Active' : 'Inactive'}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => openEdit(fee)} className="p-1.5 hover:bg-secondary-100 rounded-lg"><FiEdit2 size={14} className="text-secondary-500" /></button>
-                        <button onClick={() => { setDeleting(fee); setShowConfirm(true); }} className="p-1.5 hover:bg-red-50 rounded-lg"><FiTrash2 size={14} className="text-red-400" /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </span>
+                  )
+                },
+                { key: 'term', label: 'Term', render: (val) => <span className="text-secondary-600 capitalize text-xs">{val === 'all' ? 'All Terms' : `${val} term`}</span> },
+                { key: 'frequency', label: 'Frequency', render: (val) => <span className="text-secondary-600 capitalize text-xs">{(val||'').replace('_',' ')}</span> },
+                { key: 'status', label: 'Status', render: (_, fee) => (
+                    <button onClick={() => handleToggle(fee)}
+                      className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg transition-colors ${fee.isActive ? 'text-green-600 bg-green-50' : 'text-secondary-400 bg-secondary-100'}`}>
+                      {fee.isActive ? <FiToggleRight size={14} /> : <FiToggleLeft size={14} />}
+                      {fee.isActive ? 'Active' : 'Inactive'}
+                    </button>
+                  )
+                },
+                { key: 'actions', label: '', render: (_, fee) => (
+                    <div className="flex items-center gap-1 justify-end">
+                      <button onClick={() => openEdit(fee)} className="p-1.5 hover:bg-secondary-100 rounded-lg"><FiEdit2 size={14} className="text-secondary-500" /></button>
+                      <button onClick={() => { setDeleting(fee); setShowConfirm(true); }} className="p-1.5 hover:bg-red-50 rounded-lg"><FiTrash2 size={14} className="text-red-400" /></button>
+                    </div>
+                  )
+                }
+              ]}
+              data={filtered}
+            />
           )}
         </div>
       )}
@@ -315,8 +314,8 @@ export default function AdminFeeStructures() {
             </div>
           )}
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
-            <button type="submit" disabled={saving} className="btn-primary flex-1">{saving ? 'Saving…' : editing ? 'Update Fee' : 'Create Fee'}</button>
+            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary flex-1 min-w-0">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary flex-1 min-w-0">{saving ? 'Saving…' : editing ? 'Update Fee' : 'Create Fee'}</button>
           </div>
         </form>
       </Modal>

@@ -37,7 +37,7 @@ export default function TeacherDashboard() {
         <p className="page-subtitle">Here's your teaching overview for today.</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="My Subjects"     value={subjects.length} icon={FiBook}      color="primary" />
         <StatCard title="My Classes"      value={classes}          icon={FiUsers}     color="blue"    />
         <StatCard title="Assignments"     value={assignments.length} icon={FiClipboard} color="purple" />

@@ -88,7 +88,7 @@ export default function AdminPromote() {
       {/* Step indicator */}
       <div className="flex items-center gap-0">
         {STEPS.map((s, i) => (
-          <div key={s.n} className="flex items-center flex-1">
+          <div key={s.n} className="flex items-center flex-1 min-w-0">
             <div className={`flex items-center gap-2 ${i > 0 ? 'flex-1' : ''}`}>
               {i > 0 && <div className={`h-0.5 flex-1 ${step > i ? 'bg-primary-500' : 'bg-secondary-200'}`} />}
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all ${
@@ -194,8 +194,8 @@ export default function AdminPromote() {
 
           <p className="text-xs text-secondary-500 text-right">{selected.length} of {students.length} selected</p>
           <div className="flex gap-3">
-            <button onClick={() => setStep(1)} className="btn-secondary flex-1">← Back</button>
-            <button onClick={() => setStep(3)} disabled={selected.length === 0} className="btn-primary flex-1">
+            <button onClick={() => setStep(1)} className="btn-secondary flex-1 min-w-0">← Back</button>
+            <button onClick={() => setStep(3)} disabled={selected.length === 0} className="btn-primary flex-1 min-w-0">
               Next: Confirm →
             </button>
           </div>
@@ -209,12 +209,12 @@ export default function AdminPromote() {
 
           <div className="p-4 bg-secondary-50 rounded-xl space-y-3 border border-secondary-200">
             <div className="flex items-center gap-3">
-              <div className="flex-1 p-3 bg-white rounded-xl border border-secondary-200 text-center">
+              <div className="flex-1 min-w-0 p-3 bg-white rounded-xl border border-secondary-200 text-center">
                 <p className="text-xs text-secondary-500">From</p>
                 <p className="font-bold text-secondary-800">{fromClassObj?.name} {fromClassObj?.section}</p>
               </div>
               <FiArrowRight size={24} className="text-primary-500 flex-shrink-0" />
-              <div className="flex-1 p-3 bg-white rounded-xl border border-secondary-200 text-center">
+              <div className="flex-1 min-w-0 p-3 bg-white rounded-xl border border-secondary-200 text-center">
                 <p className="text-xs text-secondary-500">To</p>
                 <p className="font-bold text-secondary-800">{toClassObj?.name} {toClassObj?.section}</p>
               </div>
@@ -231,8 +231,8 @@ export default function AdminPromote() {
           </div>
 
           <div className="flex gap-3">
-            <button onClick={() => setStep(2)} className="btn-secondary flex-1">← Back</button>
-            <button onClick={handlePromote} disabled={promoting} className="btn-primary flex-1 flex items-center justify-center gap-2">
+            <button onClick={() => setStep(2)} className="btn-secondary flex-1 min-w-0">← Back</button>
+            <button onClick={handlePromote} disabled={promoting} className="btn-primary flex-1 min-w-0 flex items-center justify-center gap-2">
               {promoting ? (
                 <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Promoting…</>
               ) : (

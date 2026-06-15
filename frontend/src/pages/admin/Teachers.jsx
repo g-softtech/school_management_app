@@ -4,6 +4,7 @@ import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiUserCheck, FiMail, FiEye, FiEyeO
 import Modal from '../../components/common/Modal';
 import Badge from '../../components/common/Badge';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import Table from '../../components/common/Table';
 import api from '../../services/api';
 import { getErrorMessage } from '../../utils/helpers';
 
@@ -142,56 +143,49 @@ export default function AdminTeachers() {
             <p className="text-xs mt-1">Click "Add Teacher" to create one</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-secondary-50">
-                {['Name','Email','Phone','Qualification','Status','Actions'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-secondary-50">
-              {filtered.map(t => (
-                <tr key={t._id} className="hover:bg-secondary-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center text-primary-700 text-xs font-bold flex-shrink-0">
-                        {t.name?.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
-                      </div>
-                      <span className="font-medium text-secondary-800">{t.name}</span>
+          <Table
+            columns={[
+              { key: 'name', label: 'Name', render: (val, t) => (
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center text-primary-700 text-xs font-bold flex-shrink-0">
+                      {t.name?.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
                     </div>
-                  </td>
-                  <td className="px-4 py-3 text-secondary-500 text-xs">{t.email}</td>
-                  <td className="px-4 py-3 text-secondary-500 text-xs">{t.phone || '—'}</td>
-                  <td className="px-4 py-3 text-secondary-500 text-xs">{t.qualification || '—'}</td>
-                  <td className="px-4 py-3">
-                    <Badge variant={t.isActive !== false ? 'success' : 'danger'}>
-                      {t.isActive !== false ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => handleToggleActive(t)}
-                        className="p-1.5 hover:bg-secondary-100 rounded-lg transition-colors"
-                        title={t.isActive !== false ? 'Deactivate' : 'Activate'}>
-                        {t.isActive !== false
-                          ? <FiEyeOff size={14} className="text-secondary-500" />
-                          : <FiEye size={14} className="text-green-500" />}
-                      </button>
-                      <button onClick={() => openEdit(t)}
-                        className="p-1.5 hover:bg-secondary-100 rounded-lg transition-colors">
-                        <FiEdit2 size={14} className="text-secondary-500" />
-                      </button>
-                      <button onClick={() => { setDeleting(t); setShowConfirm(true); }}
-                        className="p-1.5 hover:bg-red-50 rounded-lg transition-colors">
-                        <FiTrash2 size={14} className="text-red-400" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <span className="font-medium text-secondary-800">{t.name}</span>
+                  </div>
+                )
+              },
+              { key: 'email', label: 'Email', render: (val) => <span className="text-secondary-500 text-xs">{val}</span> },
+              { key: 'phone', label: 'Phone', render: (val) => <span className="text-secondary-500 text-xs">{val || '—'}</span> },
+              { key: 'qualification', label: 'Qualification', render: (val) => <span className="text-secondary-500 text-xs">{val || '—'}</span> },
+              { key: 'isActive', label: 'Status', render: (val) => (
+                  <Badge variant={val !== false ? 'success' : 'danger'}>
+                    {val !== false ? 'Active' : 'Inactive'}
+                  </Badge>
+                )
+              },
+              { key: 'actions', label: '', render: (_, t) => (
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => handleToggleActive(t)}
+                      className="p-1.5 hover:bg-secondary-100 rounded-lg transition-colors"
+                      title={t.isActive !== false ? 'Deactivate' : 'Activate'}>
+                      {t.isActive !== false
+                        ? <FiEyeOff size={14} className="text-secondary-500" />
+                        : <FiEye size={14} className="text-green-500" />}
+                    </button>
+                    <button onClick={() => openEdit(t)}
+                      className="p-1.5 hover:bg-secondary-100 rounded-lg transition-colors">
+                      <FiEdit2 size={14} className="text-secondary-500" />
+                    </button>
+                    <button onClick={() => { setDeleting(t); setShowConfirm(true); }}
+                      className="p-1.5 hover:bg-red-50 rounded-lg transition-colors">
+                      <FiTrash2 size={14} className="text-red-400" />
+                    </button>
+                  </div>
+                )
+              }
+            ]}
+            data={filtered}
+          />
         )}
       </div>
 

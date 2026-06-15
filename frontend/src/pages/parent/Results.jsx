@@ -89,7 +89,7 @@ export default function ParentResults() {
 
       {/* Summary */}
       {!loading && summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: 'Subjects', value: summary.totalSubjects, color: 'text-secondary-800' },
             { label: 'Average', value: `${summary.average}%`, color: 'text-blue-600' },
@@ -132,7 +132,7 @@ export default function ParentResults() {
         ) : results.length === 0 ? (
           <p className="text-center text-secondary-400 py-12 text-sm">No results found for this term and session</p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto w-full max-w-full"><table className="w-full text-sm">
             <thead>
               <tr className="bg-secondary-50">
                 <th className="text-left px-5 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">#</th>
@@ -163,7 +163,7 @@ export default function ParentResults() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>

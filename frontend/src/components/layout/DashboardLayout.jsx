@@ -25,7 +25,7 @@ export default function DashboardLayout({ children, pageTitle }) {
         />
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 min-w-0 overflow-y-auto ">
           <div className="p-4 sm:p-6 max-w-7xl mx-auto w-full">
             {children}
           </div>

@@ -112,7 +112,7 @@ export default function StudentDownloads() {
       </div>
 
       {/* Summary tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-3 gap-4">
         {[
           { label: 'Total Files',    value: lessonFiles.length + assignmentFiles.length, color: 'text-secondary-800' },
           { label: 'Lesson Notes',   value: lessonFiles.length,     color: 'text-blue-600' },
@@ -127,7 +127,7 @@ export default function StudentDownloads() {
 
       {/* Filters */}
       <div className="card p-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
+        <div className="relative flex-1 min-w-0 min-w-48">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search topic or subject…" className="input-field pl-9 py-1.5 text-sm w-full" />
         </div>
@@ -197,13 +197,13 @@ export default function StudentDownloads() {
                 <div className="mt-3 flex gap-2">
                   <button
                     onClick={() => setPreview(file)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-secondary-600 bg-secondary-100 hover:bg-secondary-200 rounded-lg transition-colors"
+                    className="flex-1 min-w-0 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-secondary-600 bg-secondary-100 hover:bg-secondary-200 rounded-lg transition-colors"
                   >
                     <FiEye size={13} /> Preview
                   </button>
                   <button
                     onClick={() => handleDownload(file)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors"
+                    className="flex-1 min-w-0 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors"
                   >
                     <FiDownload size={13} /> Download
                   </button>

@@ -9,6 +9,7 @@ import Modal from '../../components/common/Modal';
 import Badge from '../../components/common/Badge';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PageSkeleton from '../../components/common/PageSkeleton';
+import Table from '../../components/common/Table';
 import api from '../../services/api';
 import { getStudents } from '../../services/studentService';
 import { getClasses } from '../../services/classService';
@@ -180,7 +181,7 @@ export default function AdminPayments() {
         <span class="badge">✓ PAYMENT CONFIRMED</span>
       </div>
       <div class="amount">₦${Number(receipt.amount).toLocaleString('en-NG', {minimumFractionDigits:2})}</div>
-      <table>
+      <div className="overflow-x-auto w-full max-w-full"><table>
         <tr><td>Receipt No.</td><td>${receipt.receiptNumber}</td></tr>
         <tr><td>Student</td><td>${receipt.studentName}</td></tr>
         <tr><td>Adm. No.</td><td>${receipt.admissionNumber || '—'}</td></tr>
@@ -192,7 +193,7 @@ export default function AdminPayments() {
         ${receipt.transactionRef ? `<tr><td>Teller/Ref</td><td>${receipt.transactionRef}</td></tr>` : ''}
         <tr><td>Date Paid</td><td>${receipt.paidAt ? new Date(receipt.paidAt).toLocaleString('en-GB') : '—'}</td></tr>
         ${receipt.recordedBy ? `<tr><td>Recorded By</td><td>${receipt.recordedBy}</td></tr>` : ''}
-      </table>
+      </table></div>
       <div class="footer">
         <p>Thank you for your payment. Keep this receipt for your records.</p>
         <p>SmartSchool Management System</p>
@@ -228,7 +229,7 @@ export default function AdminPayments() {
       </div>
 
       {/* Summary tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="card text-center">
           <p className="text-xs text-secondary-500 mb-1">Total Revenue</p>
           <p className="text-xl font-bold text-green-600">{formatCurrency(summary.totalRevenue || 0)}</p>
@@ -253,7 +254,7 @@ export default function AdminPayments() {
       {pendingApprovals.length > 0 && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3">
           <FiClock size={20} className="text-amber-600 flex-shrink-0" />
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-amber-800">
               {pendingApprovals.length} payment{pendingApprovals.length !== 1 ? 's' : ''} awaiting approval
             </p>
@@ -268,7 +269,7 @@ export default function AdminPayments() {
 
       {/* Filters */}
       <div className="card p-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-40">
+        <div className="relative flex-1 min-w-0 min-w-40">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search student, ref…" className="input-field pl-9 py-1.5 text-sm w-full" />
@@ -302,55 +303,48 @@ export default function AdminPayments() {
               <p className="font-medium">No payments found</p>
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-secondary-50">
-                  {['Student','Class','Amount','Fee Type','Method','Term','Date','Status',''].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-secondary-50">
-                {filtered.map(p => (
-                  <tr key={p._id} className={`hover:bg-secondary-50 transition-colors ${p.status === 'awaiting_approval' ? 'bg-amber-50/40' : ''}`}>
-                    <td className="px-4 py-3">
+            <Table
+              columns={[
+                { key: 'student', label: 'Student', render: (_, p) => (
+                    <>
                       <p className="font-medium text-secondary-800">{p.studentId?.userId?.name || '—'}</p>
                       <p className="text-xs text-secondary-400">{p.studentId?.admissionNumber}</p>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-secondary-500">
-                      {p.studentId?.classId?.name} {p.studentId?.classId?.section}
-                    </td>
-                    <td className="px-4 py-3 font-bold text-primary-700">{formatCurrency(p.amount)}</td>
-                    <td className="px-4 py-3 capitalize text-xs text-secondary-600">{p.feeType}</td>
-                    <td className="px-4 py-3 text-xs text-secondary-600">
+                    </>
+                  )
+                },
+                { key: 'class', label: 'Class', render: (_, p) => <span className="text-xs text-secondary-500">{p.studentId?.classId?.name} {p.studentId?.classId?.section}</span> },
+                { key: 'amount', label: 'Amount', render: (val) => <span className="font-bold text-primary-700">{formatCurrency(val)}</span> },
+                { key: 'feeType', label: 'Fee Type', render: (val) => <span className="capitalize text-xs text-secondary-600">{val}</span> },
+                { key: 'method', label: 'Method', render: (_, p) => (
+                    <div className="text-xs text-secondary-600">
                       {METHOD_LABELS[p.paymentMethod] || p.paymentMethod}
                       {p.bankName && <p className="text-secondary-400">{p.bankName}</p>}
-                    </td>
-                    <td className="px-4 py-3 capitalize text-xs text-secondary-600">{p.term}</td>
-                    <td className="px-4 py-3 text-xs text-secondary-400">
-                      {p.paidAt ? formatDateTime(p.paidAt) : formatDateTime(p.createdAt)}
-                    </td>
-                    <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        {p.status === 'awaiting_approval' && (
-                          <button onClick={() => { setActivePayment(p); setShowApprove(true); }}
-                            className="text-xs bg-green-500 text-white px-2 py-1 rounded-lg hover:bg-green-600 transition-colors font-medium">
-                            Review
-                          </button>
-                        )}
-                        {p.status === 'paid' && (
-                          <button onClick={() => openReceipt(p)}
-                            className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="View receipt">
-                            <FiEye size={14} className="text-blue-500" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  )
+                },
+                { key: 'term', label: 'Term', render: (val) => <span className="capitalize text-xs text-secondary-600">{val}</span> },
+                { key: 'date', label: 'Date', render: (_, p) => <span className="text-xs text-secondary-400">{p.paidAt ? formatDateTime(p.paidAt) : formatDateTime(p.createdAt)}</span> },
+                { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val} /> },
+                { key: 'actions', label: '', render: (_, p) => (
+                    <div className="flex items-center gap-1 justify-end">
+                      {p.status === 'awaiting_approval' && (
+                        <button onClick={() => { setActivePayment(p); setShowApprove(true); }}
+                          className="text-xs bg-green-500 text-white px-2 py-1 rounded-lg hover:bg-green-600 transition-colors font-medium">
+                          Review
+                        </button>
+                      )}
+                      {p.status === 'paid' && (
+                        <button onClick={() => openReceipt(p)}
+                          className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="View receipt">
+                          <FiEye size={14} className="text-blue-500" />
+                        </button>
+                      )}
+                    </div>
+                  )
+                }
+              ]}
+              data={filtered}
+            />
           )}
         </div>
       )}
@@ -370,7 +364,7 @@ export default function AdminPayments() {
       {/* Record Manual Payment Modal */}
       <Modal isOpen={showManual} onClose={() => setShowManual(false)} title="Record Manual Payment" size="md">
         <form onSubmit={handleManualSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="input-label">Class</label>
               <select className="input-field" value={manualForm.classId || ''}
@@ -415,7 +409,7 @@ export default function AdminPayments() {
             </div>
             <div className="col-span-2">
               <label className="input-label">Payment Method *</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {METHODS.filter(m => m !== 'paystack' && m !== 'flutterwave').map(m => (
                   <button key={m} type="button"
                     onClick={() => setManualForm(p => ({ ...p, paymentMethod: m }))}
@@ -451,8 +445,8 @@ export default function AdminPayments() {
             </div>
           )}
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setShowManual(false)} className="btn-secondary flex-1">Cancel</button>
-            <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">
+            <button type="button" onClick={() => setShowManual(false)} className="btn-secondary flex-1 min-w-0">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary flex-1 min-w-0 justify-center">
               {saving ? 'Saving…' : 'Record Payment'}
             </button>
           </div>
@@ -487,11 +481,11 @@ export default function AdminPayments() {
             </p>
             <div className="flex gap-3">
               <button onClick={() => handleReject('Payment could not be verified')}
-                className="btn-danger flex-1 flex items-center justify-center gap-2">
+                className="btn-danger flex-1 min-w-0 flex items-center justify-center gap-2">
                 <FiX size={15} /> Reject
               </button>
               <button onClick={handleApprove} disabled={saving}
-                className="btn-primary flex-1 flex items-center justify-center gap-2">
+                className="btn-primary flex-1 min-w-0 flex items-center justify-center gap-2">
                 {saving ? 'Approving…' : <><FiCheck size={15} /> Approve</>}
               </button>
             </div>

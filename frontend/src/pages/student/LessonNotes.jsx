@@ -47,7 +47,7 @@ export default function StudentLessonNotes() {
 
       {/* Filters */}
       <div className="card p-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
+        <div className="relative flex-1 min-w-0 min-w-48">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={15} />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search topic or subject…" className="input-field pl-9 py-1.5 text-sm w-full" />
         </div>

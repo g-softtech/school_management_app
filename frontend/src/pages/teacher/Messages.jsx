@@ -106,7 +106,7 @@ export default function TeacherMessages() {
               />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-w-0 overflow-y-auto">
             {loading ? (
               <div className="p-3 space-y-2">
                 {[...Array(5)].map((_, i) => <div key={i} className="h-12 bg-secondary-50 rounded-lg animate-pulse" />)}
@@ -158,7 +158,7 @@ export default function TeacherMessages() {
         <div className="flex-1 flex flex-col min-w-0">
           {!activeContact ? (
             /* Empty chat — NO duplicate button, just a hint */
-            <div className="flex-1 flex flex-col items-center justify-center text-secondary-400 gap-2">
+            <div className="flex-1 min-w-0 flex flex-col items-center justify-center text-secondary-400 gap-2">
               <FiMessageSquare size={40} className="opacity-30" />
               <p className="text-sm font-medium">Select a contact to start messaging</p>
               <p className="text-xs">or click <span className="text-primary-500 font-semibold">New Message</span> above</p>
@@ -177,7 +177,7 @@ export default function TeacherMessages() {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-secondary-50/30">
+              <div className="flex-1 min-w-0 overflow-y-auto p-4 space-y-3 bg-secondary-50/30">
                 {thread.length === 0 && (
                   <p className="text-center text-secondary-400 text-sm py-8">No messages yet. Say hello!</p>
                 )}
@@ -208,7 +208,7 @@ export default function TeacherMessages() {
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
                   placeholder="Type a message…"
-                  className="input-field flex-1 py-2 text-sm"
+                  className="input-field flex-1 min-w-0 py-2 text-sm"
                 />
                 <button
                   onClick={handleSend}

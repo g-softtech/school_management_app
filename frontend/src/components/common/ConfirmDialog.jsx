@@ -29,7 +29,7 @@ export default function ConfirmDialog({
           <p className="text-sm text-secondary-600 leading-relaxed pt-1.5">{message}</p>
         </div>
         <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="btn-secondary flex-1" disabled={loading}>
+          <button onClick={onClose} className="btn-secondary flex-1 min-w-0" disabled={loading}>
             {cancelLabel}
           </button>
           <button onClick={onConfirm} className={`${btnClass} flex-1 justify-center`} disabled={loading}>

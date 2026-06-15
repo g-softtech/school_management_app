@@ -52,7 +52,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard title="Total Students" value={data?.counts?.students    ?? 0} icon={FiUsers}      color="blue"    />
         <StatCard title="Total Teachers" value={data?.counts?.teachers    ?? 0} icon={FiUserCheck}  color="green"   />
         <StatCard title="Total Classes"  value={data?.counts?.classes     ?? 0} icon={FiBook}       color="purple"  />
@@ -73,7 +73,7 @@ export default function AdminDashboard() {
             'subject-performance'
           )}
         >
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={280} >
             <BarChart data={subjectData.slice(0, 8)} margin={{ top: 5, right: 10, left: -20, bottom: 45 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis dataKey="subjectName" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" interval={0} />
@@ -94,7 +94,7 @@ export default function AdminDashboard() {
             'grade-distribution'
           )}
         >
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={280} >
             <PieChart>
               <Pie
                 data={gradeData}
@@ -141,7 +141,7 @@ export default function AdminDashboard() {
                   <span className="text-red-600 font-bold text-xl">{data.academic.worstSubject?.avgScore}</span>
                 </div>
               )}
-              <div className="grid grid-cols-3 gap-3 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                 {[
                   { label: 'Total Exams', value: data.academic?.totalExams   ?? 0, color: 'text-secondary-800' },
                   { label: 'Passed',      value: data.academic?.totalPassed  ?? 0, color: 'text-green-600' },

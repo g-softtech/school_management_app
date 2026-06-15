@@ -36,7 +36,7 @@ export function ChartSkeleton({ height = 220 }) {
         {[60, 85, 45, 90, 70, 55, 80, 65].map((h, i) => (
           <div
             key={i}
-            className="flex-1 bg-secondary-100 rounded-t-lg"
+            className="flex-1 min-w-0 bg-secondary-100 rounded-t-lg"
             style={{ height: `${h}%` }}
           />
         ))}

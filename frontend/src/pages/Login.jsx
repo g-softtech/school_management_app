@@ -103,7 +103,7 @@ export default function Login() {
         </div>
 
         {/* Bottom stats */}
-        <div className="relative z-10 grid grid-cols-3 gap-4">
+        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { value: '500+', label: 'Students' },
             { value: '50+',  label: 'Teachers' },
@@ -207,7 +207,7 @@ export default function Login() {
             {/* Demo accounts */}
             <div className="mt-6">
               <p className="text-xs text-secondary-400 text-center mb-3">— Quick access for testing —</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {DEMO_ACCOUNTS.map((a) => (
                   <button
                     key={a.label}

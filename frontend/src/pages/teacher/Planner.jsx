@@ -97,7 +97,7 @@ export default function TeacherMessages() {
         {/* Conversation thread */}
         <div className="lg:col-span-2 card flex flex-col overflow-hidden">
           {!activeContact ? (
-            <div className="flex-1 flex items-center justify-center text-secondary-400 text-sm">Select a conversation</div>
+            <div className="flex-1 min-w-0 flex items-center justify-center text-secondary-400 text-sm">Select a conversation</div>
           ) : (
             <>
               <div className="flex items-center gap-3 pb-4 border-b border-secondary-100 mb-4 flex-shrink-0">
@@ -109,7 +109,7 @@ export default function TeacherMessages() {
                   <Badge variant={roleColor[activeContact.user.role] || 'gray'}>{activeContact.user.role}</Badge>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto space-y-3 mb-4">
+              <div className="flex-1 min-w-0 overflow-y-auto space-y-3 mb-4">
                 {messages.map((m) => {
                   const isMe = m.senderId?._id === activeContact.user.id ? false : true;
                   return (
@@ -125,7 +125,7 @@ export default function TeacherMessages() {
               <div className="flex gap-2 flex-shrink-0">
                 <input value={reply} onChange={(e) => setReply(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendReply()}
-                  placeholder="Type a message..." className="input-field flex-1" />
+                  placeholder="Type a message..." className="input-field flex-1 min-w-0" />
                 <button onClick={handleSendReply} disabled={saving || !reply.trim()} className="btn-primary px-4">
                   <FiSend size={16} />
                 </button>

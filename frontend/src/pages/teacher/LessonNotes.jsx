@@ -5,6 +5,7 @@ import api from '../../services/api';
 import Modal from '../../components/common/Modal';
 import FileUpload from '../../components/common/FileUpload';
 import FilePreview from '../../components/common/FilePreview';
+import Table from '../../components/common/Table';
 import { TERMS, SESSIONS } from '../../utils/constants';
 import { formatDate, getErrorMessage } from '../../utils/helpers';
 
@@ -160,7 +161,7 @@ export default function TeacherLessonNotes() {
 
       {/* Filters */}
       <div className="card p-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
+        <div className="relative flex-1 min-w-0 min-w-48">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search topic or subject…" className="input-field pl-9 py-1.5 text-sm w-full" />
         </div>
@@ -184,35 +185,19 @@ export default function TeacherLessonNotes() {
             <p className="text-xs mt-1">Click "New Note" to create your first lesson note</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-secondary-50">
-                {['Topic','Subject','Class','Week','Term','File','Status','Date',''].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-secondary-50">
-              {filtered.map((n) => (
-                <tr key={n._id} className="hover:bg-secondary-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-secondary-800 max-w-44 truncate">{n.topic}</td>
-                  <td className="px-4 py-3 text-secondary-600">{n.subjectId?.name || '—'}</td>
-                  <td className="px-4 py-3 text-secondary-600">{n.classId?.name || '—'}</td>
-                  <td className="px-4 py-3 text-center text-secondary-600">{n.week}</td>
-                  <td className="px-4 py-3 capitalize text-secondary-600">{n.term}</td>
-                  <td className="px-4 py-3 text-center">
-                    {n.fileUrl
-                      ? <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">📎 Yes</span>
-                      : <span className="text-xs text-secondary-300">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${n.isPublished ? 'bg-green-100 text-green-700' : 'bg-secondary-100 text-secondary-500'}`}>
-                      {n.isPublished ? 'Published' : 'Draft'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-secondary-500 text-xs">{formatDate(n.createdAt)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
+          <div className="card overflow-hidden p-0">
+            <Table
+              columns={[
+                { key: 'topic', label: 'Topic', render: (val) => <span className="font-medium text-secondary-800 max-w-44 truncate">{val}</span> },
+                { key: 'subjectId', label: 'Subject', render: (val) => <span className="text-secondary-600">{val?.name || '—'}</span> },
+                { key: 'classId', label: 'Class', render: (val) => <span className="text-secondary-600">{val?.name || '—'}</span> },
+                { key: 'week', label: 'Week', render: (val) => <span className="text-secondary-600">{val}</span> },
+                { key: 'term', label: 'Term', render: (val) => <span className="capitalize text-secondary-600">{val}</span> },
+                { key: 'fileUrl', label: 'File', render: (val) => val ? <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">📎 Yes</span> : <span className="text-xs text-secondary-300">—</span> },
+                { key: 'isPublished', label: 'Status', render: (val) => <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${val ? 'bg-green-100 text-green-700' : 'bg-secondary-100 text-secondary-500'}`}>{val ? 'Published' : 'Draft'}</span> },
+                { key: 'createdAt', label: 'Date', render: (val) => <span className="text-secondary-500 text-xs">{formatDate(val)}</span> },
+                { key: 'actions', label: '', render: (_, n) => (
+                    <div className="flex items-center gap-1 justify-end">
                       <button onClick={() => openView(n)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="View">
                         <FiFileText size={14} className="text-blue-500" />
                       </button>
@@ -226,11 +211,12 @@ export default function TeacherLessonNotes() {
                         <FiTrash2 size={14} className="text-red-400" />
                       </button>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  )
+                }
+              ]}
+              data={filtered}
+            />
+          </div>
         )}
       </div>
 
@@ -355,8 +341,8 @@ export default function TeacherLessonNotes() {
           )}
 
           <div className="flex gap-3 pt-2">
-            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1">
+            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 min-w-0">Cancel</button>
+            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 min-w-0">
               {saving ? 'Saving…' : editNote ? 'Save Changes' : 'Create Note'}
             </button>
           </div>

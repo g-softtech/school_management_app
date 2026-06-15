@@ -208,8 +208,8 @@ export default function StudentAssignments() {
             />
 
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setSelected(null)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={handleSubmit} disabled={submitting} className="btn-primary flex-1">
+              <button onClick={() => setSelected(null)} className="btn-secondary flex-1 min-w-0">Cancel</button>
+              <button onClick={handleSubmit} disabled={submitting} className="btn-primary flex-1 min-w-0">
                 {submitting ? 'Submitting…' : 'Submit Assignment'}
               </button>
             </div>

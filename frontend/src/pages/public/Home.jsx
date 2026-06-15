@@ -121,7 +121,7 @@ export default function Home() {
       {/* ── STATS ────────────────────────────────────────────── */}
       <section className="py-10 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {stats.map((s) => (
               <div key={s.label} className="text-center p-6 rounded-2xl border border-secondary-100 hover:border-primary-200 hover:shadow-card-md transition-all duration-300">
                 <p className="text-3xl lg:text-4xl font-bold text-primary-500 mb-1">{s.value}</p>
@@ -214,7 +214,7 @@ export default function Home() {
               <p className="text-secondary-600 leading-relaxed mb-5">
                 Our students don't just learn — they grow into confident, curious, and capable leaders. With access to digital tools and dedicated teachers, every day is an opportunity to excel.
               </p>
-              <div className="grid grid-cols-2 gap-4 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                 {[
                   { num: '40+', label: 'Subjects Offered' },
                   { num: '100%', label: 'Digital Result Access' },

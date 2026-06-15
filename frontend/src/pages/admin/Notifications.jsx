@@ -149,7 +149,7 @@ export default function AdminNotifications() {
       </div>
 
       {/* Stat tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-3 gap-4">
         {[
           { label: 'Total Received',  value: stats.total,  color: 'text-secondary-800' },
           { label: 'Unread',          value: unreadCount,  color: 'text-red-500' },
@@ -164,7 +164,7 @@ export default function AdminNotifications() {
 
       {/* Filters */}
       <div className="card p-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
+        <div className="relative flex-1 min-w-0 min-w-48">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
           <input
             value={search}
@@ -263,7 +263,7 @@ export default function AdminNotifications() {
             <p>This sends an in-app notification to <strong>all active users</strong> of the selected role. It will appear in their notification bell instantly.</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="input-label">Send To (Role) *</label>
               <select name="targetRole" value={form.targetRole} onChange={fc} className="input-field capitalize">
@@ -332,10 +332,10 @@ export default function AdminNotifications() {
           )}
 
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => { setShowModal(false); setForm(EMPTY_FORM); }} className="btn-secondary flex-1">
+            <button type="button" onClick={() => { setShowModal(false); setForm(EMPTY_FORM); }} className="btn-secondary flex-1 min-w-0">
               Cancel
             </button>
-            <button type="submit" disabled={sending} className="btn-primary flex-1 flex items-center justify-center gap-2">
+            <button type="submit" disabled={sending} className="btn-primary flex-1 min-w-0 flex items-center justify-center gap-2">
               <FiSend size={14} />
               {sending ? 'Sending…' : `Send to All ${form.targetRole.charAt(0).toUpperCase() + form.targetRole.slice(1)}s`}
             </button>

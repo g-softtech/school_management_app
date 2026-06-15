@@ -115,7 +115,7 @@ function CellEditor({ initial, subjects, teachers, onSave, onClear, onCancel }) 
         <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Assembly, Games" className="input-field py-1 text-xs w-full mt-0.5" />
       </div>
       <div className="flex gap-1.5 pt-1">
-        <button onClick={() => onSave({ subjectId, teacherId, label })} className="flex-1 bg-primary-500 hover:bg-primary-600 text-white text-xs py-1.5 rounded-lg font-medium transition-colors">Save</button>
+        <button onClick={() => onSave({ subjectId, teacherId, label })} className="flex-1 min-w-0 bg-primary-500 hover:bg-primary-600 text-white text-xs py-1.5 rounded-lg font-medium transition-colors">Save</button>
         {initial && <button onClick={onClear} className="px-2 bg-red-50 hover:bg-red-100 text-red-500 text-xs py-1.5 rounded-lg"><FiTrash2 size={12} /></button>}
         <button onClick={onCancel} className="px-2 bg-secondary-100 hover:bg-secondary-200 text-secondary-600 text-xs py-1.5 rounded-lg"><FiX size={12} /></button>
       </div>
@@ -293,7 +293,7 @@ export default function AdminTimetable() {
 
           {/* Timetable grid */}
           <div className="card overflow-x-auto p-0">
-            <table className="w-full text-xs min-w-[640px]">
+            <div className="overflow-x-auto w-full max-w-full"><table className="w-full text-xs min-w-full max-w-full">
               <thead>
                 <tr className="bg-secondary-800 text-white">
                   <th className="px-3 py-3 text-left font-semibold w-28">Period</th>
@@ -356,7 +356,7 @@ export default function AdminTimetable() {
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           </div>
           <p className="text-xs text-secondary-400 text-center">Click any cell to assign a subject · Click "Edit Periods" to customise time slots · Save when done</p>
         </>

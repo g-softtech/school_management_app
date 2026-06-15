@@ -5,6 +5,7 @@ import api from '../../services/api';
 import FilePreview from '../../components/common/FilePreview';
 import FileUpload from '../../components/common/FileUpload';
 import Modal from '../../components/common/Modal';
+import Table from '../../components/common/Table';
 import { TERMS, SESSIONS } from '../../utils/constants';
 import { formatDate, getErrorMessage } from '../../utils/helpers';
 
@@ -137,7 +138,7 @@ export default function TeacherAssignments() {
       </div>
 
       <div className="card p-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
+        <div className="relative flex-1 min-w-0 min-w-48">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" className="input-field pl-9 py-1.5 text-sm w-full" />
         </div>
@@ -156,43 +157,35 @@ export default function TeacherAssignments() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-14 text-secondary-400"><FiClipboard size={32} className="mx-auto mb-3 opacity-40" /><p>No assignments found</p></div>
         ) : (
-          <table className="w-full text-sm">
-            <thead><tr className="bg-secondary-50">
-              {['Title', 'Subject', 'Class', 'Due Date', 'Max Score', 'Term', ''].map((h) => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
-              ))}
-            </tr></thead>
-            <tbody className="divide-y divide-secondary-50">
-              {filtered.map((a) => {
-                const overdue = new Date() > new Date(a.dueDate);
-                return (
-                  <tr key={a._id} className="hover:bg-secondary-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-secondary-800 max-w-48 truncate">{a.title}</td>
-                    <td className="px-4 py-3 text-secondary-600">{a.subjectId?.name || '—'}</td>
-                    <td className="px-4 py-3 text-secondary-600">{a.classId?.name || '—'}</td>
-                    <td className="px-4 py-3 text-secondary-600">
-                      <span className={overdue ? 'text-red-500 font-medium' : ''}>{formatDate(a.dueDate)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-center text-secondary-600">{a.maxScore}</td>
-                    <td className="px-4 py-3 capitalize text-secondary-600">{a.term}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => openSubmissions(a)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="View submissions">
-                          <FiEye size={14} className="text-blue-500" />
-                        </button>
-                        <button onClick={() => openEdit(a)} className="p-1.5 hover:bg-secondary-100 rounded-lg transition-colors">
-                          <FiEdit2 size={14} className="text-secondary-500" />
-                        </button>
-                        <button onClick={() => handleDelete(a._id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors">
-                          <FiTrash2 size={14} className="text-red-400" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <Table 
+            columns={[
+              { key: 'title', label: 'Title', render: (val) => <span className="font-medium text-secondary-800 max-w-48 truncate block">{val}</span> },
+              { key: 'subjectId', label: 'Subject', render: (val) => val?.name || '—' },
+              { key: 'classId', label: 'Class', render: (val) => val?.name || '—' },
+              { key: 'dueDate', label: 'Due Date', render: (val) => {
+                  const overdue = new Date() > new Date(val);
+                  return <span className={overdue ? 'text-red-500 font-medium' : ''}>{formatDate(val)}</span>;
+                }
+              },
+              { key: 'maxScore', label: 'Max Score', render: (val) => <span className="text-center block">{val}</span> },
+              { key: 'term', label: 'Term', render: (val) => <span className="capitalize">{val}</span> },
+              { key: 'actions', label: '', render: (_, a) => (
+                  <div className="flex items-center gap-1 justify-end">
+                    <button onClick={() => openSubmissions(a)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="View submissions">
+                      <FiEye size={14} className="text-blue-500" />
+                    </button>
+                    <button onClick={() => openEdit(a)} className="p-1.5 hover:bg-secondary-100 rounded-lg transition-colors">
+                      <FiEdit2 size={14} className="text-secondary-500" />
+                    </button>
+                    <button onClick={() => handleDelete(a._id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors">
+                      <FiTrash2 size={14} className="text-red-400" />
+                    </button>
+                  </div>
+                )
+              }
+            ]} 
+            data={filtered} 
+          />
         )}
       </div>
 
@@ -263,8 +256,8 @@ export default function TeacherAssignments() {
             maxSizeMB={20}
           />
           <div className="flex gap-3 pt-2">
-            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1">{saving ? 'Saving…' : editItem ? 'Save Changes' : 'Create'}</button>
+            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 min-w-0">Cancel</button>
+            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 min-w-0">{saving ? 'Saving…' : editItem ? 'Save Changes' : 'Create'}</button>
           </div>
         </div>
       </Modal>
@@ -307,7 +300,7 @@ export default function TeacherAssignments() {
                 {gradingId === sub._id && (
                   <div className="flex gap-2 pt-1">
                     <input type="number" value={gradeForm.score} onChange={(e) => setGradeForm((p) => ({ ...p, score: e.target.value }))} placeholder={`Score (max ${viewSubs?.maxScore})`} min="0" max={viewSubs?.maxScore} className="input-field py-1.5 text-sm w-36" />
-                    <input value={gradeForm.feedback} onChange={(e) => setGradeForm((p) => ({ ...p, feedback: e.target.value }))} placeholder="Feedback (optional)" className="input-field py-1.5 text-sm flex-1" />
+                    <input value={gradeForm.feedback} onChange={(e) => setGradeForm((p) => ({ ...p, feedback: e.target.value }))} placeholder="Feedback (optional)" className="input-field py-1.5 text-sm flex-1 min-w-0" />
                     <button onClick={() => handleGrade(sub._id)} className="btn-primary text-sm px-4">Save</button>
                     <button onClick={() => setGradingId(null)} className="btn-secondary text-sm px-3">✕</button>
                   </div>

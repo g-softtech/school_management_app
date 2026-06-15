@@ -9,6 +9,7 @@ import Modal from '../../components/common/Modal';
 import Badge from '../../components/common/Badge';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PageSkeleton from '../../components/common/PageSkeleton';
+import Table from '../../components/common/Table';
 import {
   getAllBills, generateBills, getDefaulters,
   syncBill, applyDiscount, waiveItem, deleteBill,
@@ -162,7 +163,7 @@ export default function AdminBilling() {
       </div>
 
       {/* Summary tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Total Billed',  value: formatCurrency(summary.totalBilled  || 0), color: 'text-secondary-800' },
           { label: 'Total Paid',    value: formatCurrency(summary.totalPaid    || 0), color: 'text-green-600'     },
@@ -193,7 +194,7 @@ export default function AdminBilling() {
 
       {/* Filters */}
       <div className="card p-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-40">
+        <div className="relative flex-1 min-w-0 min-w-40">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search student…" className="input-field pl-9 py-1.5 text-sm w-full" />
@@ -228,56 +229,35 @@ export default function AdminBilling() {
                 <p className="text-xs mt-1">Click "Generate Bills" to create bills for a class</p>
               </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-secondary-50">
-                    {['Student','Adm No','Class','Total','Paid','Balance','Status',''].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-secondary-50">
-                  {filtered.map(bill => (
-                    <tr key={bill._id} className="hover:bg-secondary-50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-secondary-800">
-                        {bill.studentId?.userId?.name || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-secondary-500">
-                        {bill.studentId?.admissionNumber || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-secondary-600 text-xs">
-                        {bill.classId?.name} {bill.classId?.section}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-secondary-800">
-                        {formatCurrency(bill.totalAmount)}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-green-600">
-                        {formatCurrency(bill.totalPaid)}
-                      </td>
-                      <td className="px-4 py-3 font-bold text-red-500">
-                        {formatCurrency(bill.totalBalance)}
-                      </td>
-                      <td className="px-4 py-3"><StatusBadge status={bill.status} /></td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => { setViewBill(bill); setShowDetail(true); }}
-                            className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="View details">
-                            <FiEye size={14} className="text-blue-500" />
-                          </button>
-                          <button onClick={() => handleSync(bill._id)}
-                            className="p-1.5 hover:bg-secondary-100 rounded-lg transition-colors" title="Sync payments">
-                            <FiRefreshCw size={14} className="text-secondary-500" />
-                          </button>
-                          <button onClick={() => { setDeleting(bill); setShowConfirm(true); }}
-                            className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                            <FiTrash2 size={14} className="text-red-400" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <Table
+                columns={[
+                  { key: 'studentId', label: 'Student', render: (val) => <span className="font-medium text-secondary-800">{val?.userId?.name || '—'}</span> },
+                  { key: 'admNo', label: 'Adm No', render: (_, b) => <span className="text-xs text-secondary-500">{b.studentId?.admissionNumber || '—'}</span> },
+                  { key: 'classId', label: 'Class', render: (val) => <span className="text-secondary-600 text-xs">{val?.name} {val?.section}</span> },
+                  { key: 'totalAmount', label: 'Total', render: (val) => <span className="font-semibold text-secondary-800">{formatCurrency(val)}</span> },
+                  { key: 'totalPaid', label: 'Paid', render: (val) => <span className="font-semibold text-green-600">{formatCurrency(val)}</span> },
+                  { key: 'totalBalance', label: 'Balance', render: (val) => <span className="font-bold text-red-500">{formatCurrency(val)}</span> },
+                  { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val} /> },
+                  { key: 'actions', label: '', render: (_, bill) => (
+                      <div className="flex items-center gap-1 justify-end">
+                        <button onClick={() => { setViewBill(bill); setShowDetail(true); }}
+                          className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" title="View details">
+                          <FiEye size={14} className="text-blue-500" />
+                        </button>
+                        <button onClick={() => handleSync(bill._id)}
+                          className="p-1.5 hover:bg-secondary-100 rounded-lg transition-colors" title="Sync payments">
+                          <FiRefreshCw size={14} className="text-secondary-500" />
+                        </button>
+                        <button onClick={() => { setDeleting(bill); setShowConfirm(true); }}
+                          className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                          <FiTrash2 size={14} className="text-red-400" />
+                        </button>
+                      </div>
+                    )
+                  }
+                ]}
+                data={filtered}
+              />
             )}
           </div>
         )
@@ -293,29 +273,19 @@ export default function AdminBilling() {
               <p className="text-xs mt-1">All students are up to date with payments</p>
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-secondary-50">
-                  {['#','Student','Adm No','Class','Total','Paid','Outstanding','Status'].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-secondary-50">
-                {defaulters.map((bill, i) => (
-                  <tr key={bill._id} className="hover:bg-red-50/30 transition-colors">
-                    <td className="px-4 py-3 text-secondary-400 text-xs">{i + 1}</td>
-                    <td className="px-4 py-3 font-medium text-secondary-800">{bill.studentId?.userId?.name || '—'}</td>
-                    <td className="px-4 py-3 text-xs text-secondary-500">{bill.studentId?.admissionNumber || '—'}</td>
-                    <td className="px-4 py-3 text-xs text-secondary-500">{bill.classId?.name} {bill.classId?.section}</td>
-                    <td className="px-4 py-3 font-semibold">{formatCurrency(bill.totalAmount)}</td>
-                    <td className="px-4 py-3 text-green-600 font-semibold">{formatCurrency(bill.totalPaid)}</td>
-                    <td className="px-4 py-3 font-bold text-red-500">{formatCurrency(bill.totalBalance)}</td>
-                    <td className="px-4 py-3"><StatusBadge status={bill.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Table
+              columns={[
+                { key: 'index', label: '#', render: (_, b, i) => <span className="text-secondary-400 text-xs">{i + 1}</span> },
+                { key: 'studentId', label: 'Student', render: (val) => <span className="font-medium text-secondary-800">{val?.userId?.name || '—'}</span> },
+                { key: 'admNo', label: 'Adm No', render: (_, b) => <span className="text-xs text-secondary-500">{b.studentId?.admissionNumber || '—'}</span> },
+                { key: 'classId', label: 'Class', render: (val) => <span className="text-secondary-600 text-xs">{val?.name} {val?.section}</span> },
+                { key: 'totalAmount', label: 'Total', render: (val) => <span className="font-semibold text-secondary-800">{formatCurrency(val)}</span> },
+                { key: 'totalPaid', label: 'Paid', render: (val) => <span className="font-semibold text-green-600">{formatCurrency(val)}</span> },
+                { key: 'totalBalance', label: 'Outstanding', render: (val) => <span className="font-bold text-red-500">{formatCurrency(val)}</span> },
+                { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val} /> }
+              ]}
+              data={defaulters}
+            />
           )}
         </div>
       )}
@@ -347,7 +317,7 @@ export default function AdminBilling() {
               {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="input-label">Term *</label>
               <select className="input-field" value={genForm.term}
@@ -364,8 +334,8 @@ export default function AdminBilling() {
             </div>
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setShowGenerate(false)} className="btn-secondary flex-1">Cancel</button>
-            <button type="submit" disabled={generating} className="btn-primary flex-1 justify-center">
+            <button type="button" onClick={() => setShowGenerate(false)} className="btn-secondary flex-1 min-w-0">Cancel</button>
+            <button type="submit" disabled={generating} className="btn-primary flex-1 min-w-0 justify-center">
               {generating ? (
                 <span className="flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -393,7 +363,7 @@ export default function AdminBilling() {
             </div>
 
             {/* Totals */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="text-center p-3 bg-secondary-50 rounded-xl">
                 <p className="text-xs text-secondary-500">Total</p>
                 <p className="font-bold text-secondary-800">{formatCurrency(viewBill.totalAmount)}</p>

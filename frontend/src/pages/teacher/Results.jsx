@@ -201,7 +201,7 @@ export default function TeacherResults() {
           {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         {classFilter && (
-          <div className="relative flex-1 min-w-48">
+          <div className="relative flex-1 min-w-0 min-w-48">
             <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search student or subject…" className="input-field pl-9 py-1.5 text-sm w-full" />
           </div>
@@ -217,7 +217,7 @@ export default function TeacherResults() {
           ) : filtered.length === 0 ? (
             <div className="text-center py-14 text-secondary-400"><FiAward size={32} className="mx-auto mb-3 opacity-40" /><p>No results found</p></div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto w-full max-w-full"><table className="w-full text-sm">
               <thead><tr className="bg-secondary-50">
                 {['Student', 'Subject', 'CA (40)', 'Exam (60)', 'Total', 'Grade', 'Remark', ''].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
@@ -244,7 +244,7 @@ export default function TeacherResults() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       )}
@@ -252,7 +252,7 @@ export default function TeacherResults() {
       {/* Add/Edit Modal */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editResult ? 'Edit Result' : 'Add Result'} size="md">
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="input-label">Class <span className="text-red-500">*</span></label>
               <select name="classId" value={form.classId} onChange={fc} className="input-field">
@@ -299,8 +299,8 @@ export default function TeacherResults() {
           )}
 
           <div className="flex gap-3 pt-2">
-            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1">{saving ? 'Saving…' : editResult ? 'Update' : 'Upload'}</button>
+            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 min-w-0">Cancel</button>
+            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 min-w-0">{saving ? 'Saving…' : editResult ? 'Update' : 'Upload'}</button>
           </div>
         </div>
       </Modal>

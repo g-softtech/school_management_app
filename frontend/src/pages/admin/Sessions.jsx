@@ -128,7 +128,7 @@ export default function AdminSessions() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-3 gap-4">
         {[
           { label: 'Total Sessions',  value: sessions.length, color: 'text-secondary-800' },
           { label: 'Current Session', value: sessions.find((s) => s.isCurrent)?.name || '—', color: 'text-primary-600' },
@@ -276,7 +276,7 @@ export default function AdminSessions() {
               {TERMS.map((t, i) => (
                 <div key={t.key} className="p-3 bg-secondary-50 rounded-xl border border-secondary-200">
                   <p className="text-xs font-semibold text-secondary-700 mb-2 capitalize">{t.label}</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="input-label">Start Date</label>
                       <input type="date" value={form.terms[i]?.startDate || ''}
@@ -304,8 +304,8 @@ export default function AdminSessions() {
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
-            <button type="submit" disabled={saving} className="btn-primary flex-1">
+            <button type="button" onClick={() => setShowModal(false)} className="btn-secondary flex-1 min-w-0">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary flex-1 min-w-0">
               {saving ? 'Saving…' : editing ? 'Update Session' : 'Create Session'}
             </button>
           </div>

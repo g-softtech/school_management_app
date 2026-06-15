@@ -111,7 +111,7 @@ export default function ParentDashboard() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Average Score', value: `${average}%`, icon: FiTrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
           { label: 'Subjects Passed', value: passed, icon: FiCheckCircle, color: 'text-green-600', bg: 'bg-green-50' },
@@ -160,7 +160,7 @@ export default function ParentDashboard() {
                 ))}
               </div>
               {summary && (
-                <div className="grid grid-cols-3 gap-2 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                   <div className="text-center p-2 bg-secondary-50 rounded-xl">
                     <p className="text-lg font-bold text-secondary-800">{summary.totalSubjects}</p>
                     <p className="text-xs text-secondary-400">Subjects</p>
@@ -220,7 +220,7 @@ export default function ParentDashboard() {
           )}
 
           {/* Quick links */}
-          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-secondary-100">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-secondary-100">
             {[
               { to: '/parent/results',  icon: FiAward, label: "Child's Results" },
               { to: '/parent/messages', icon: FiMessageSquare, label: 'Messages' },

@@ -189,7 +189,7 @@ export default function PublicLayout({ children }) {
   return (
     <div className="min-h-screen flex flex-col bg-white">
       <Navbar scrolled={scrolled} />
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 min-w-0">{children}</main>
       <Footer />
     </div>
   );

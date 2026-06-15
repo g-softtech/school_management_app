@@ -67,7 +67,7 @@ export default function TeacherMyClasses() {
 
       {/* Filters */}
       <div className="card p-4 flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
+        <div className="relative flex-1 min-w-0 min-w-48">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={14} />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search subject or class…" className="input-field pl-9 py-1.5 text-sm w-full" />
         </div>
@@ -135,7 +135,7 @@ export default function TeacherMyClasses() {
       >
         {loadingAnalytics ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[...Array(5)].map((_, i) => <div key={i} className="h-16 bg-secondary-50 rounded-xl animate-pulse" />)}
             </div>
             <div className="h-48 bg-secondary-50 rounded-xl animate-pulse" />
@@ -149,7 +149,7 @@ export default function TeacherMyClasses() {
             </p>
 
             {/* Overview tiles */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-5 gap-3">
               {[
                 { label: 'Students',  value: analytics.overview?.enrolledStudents, color: 'text-secondary-800' },
                 { label: 'Avg Score', value: `${analytics.overview?.averageScore ?? 0}%`, color: 'text-blue-600' },
@@ -167,7 +167,7 @@ export default function TeacherMyClasses() {
             {/* Subject averages bar chart */}
             {barData.length > 0 && (
               <ChartCard title="Subject Averages" isEmpty={false}>
-                <ResponsiveContainer width="100%" height={180}>
+                <ResponsiveContainer width="100%" height={280} >
                   <BarChart data={barData} margin={{ left: -20, right: 10, bottom: 30 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                     <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" />

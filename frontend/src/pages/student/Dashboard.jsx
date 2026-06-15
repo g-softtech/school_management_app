@@ -84,13 +84,13 @@ export default function StudentDashboard() {
 
       {/* Stat cards */}
       {loading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="card animate-pulse"><div className="h-16 bg-secondary-100 rounded-xl" /></div>
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: 'Avg Score', value: average, icon: FiTrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
             { label: 'Subjects Passed', value: passed, icon: FiCheckCircle, color: 'text-green-600', bg: 'bg-green-50' },
@@ -142,7 +142,7 @@ export default function StudentDashboard() {
 
           {/* Highlights */}
           {!loading && results.length > 0 && (
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
               {bestResult && (
                 <div className="p-2.5 bg-green-50 rounded-xl">
                   <p className="text-xs text-green-600 font-medium">Best Subject</p>
@@ -191,7 +191,7 @@ export default function StudentDashboard() {
           )}
 
           {/* Quick links */}
-          <div className="grid grid-cols-3 gap-2 pt-1 border-t border-secondary-100">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-secondary-100">
             {[
               { to: '/student/lesson-notes', icon: FiFileText, label: 'Notes' },
               { to: '/student/analytics',    icon: FiTrendingUp, label: 'Progress' },

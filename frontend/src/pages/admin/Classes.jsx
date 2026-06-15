@@ -4,6 +4,7 @@ import { FiPlus, FiEdit2, FiTrash2, FiUsers, FiBook, FiChevronDown, FiChevronUp 
 import Modal from '../../components/common/Modal';
 import Badge from '../../components/common/Badge';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import Table from '../../components/common/Table';
 import { getClasses, createClass, updateClass, deleteClass } from '../../services/classService';
 import { getErrorMessage } from '../../utils/helpers';
 import { SESSIONS } from '../../utils/constants';
@@ -110,94 +111,74 @@ export default function AdminClasses() {
         </div>
       ) : (
         <div className="card overflow-hidden p-0">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-secondary-50">
-                {['Class Name','Section','Session','Class Teacher','Students','Status','Actions'].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-secondary-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {classes.map((cls) => {
-                const clsSubs    = classSubjects(cls._id);
-                const isExpanded = expanded === cls._id;
-                return (
-                  <>
-                    <tr key={cls._id} className="border-t border-secondary-50 hover:bg-secondary-50 transition-colors">
-                      <td className="px-4 py-3 font-semibold text-secondary-800">{cls.name}</td>
-                      <td className="px-4 py-3 text-secondary-600">{cls.section || '—'}</td>
-                      <td className="px-4 py-3 text-secondary-600">{cls.academicYear}</td>
-                      <td className="px-4 py-3 text-secondary-600">
-                        {cls.classTeacherId?.name
-                          ? <span className="font-medium">{cls.classTeacherId.name}</span>
-                          : <Badge variant="gray">Not assigned</Badge>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="info">{cls.studentCount ?? 0}</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant={cls.isActive ? 'success' : 'danger'}>{cls.isActive ? 'Active' : 'Inactive'}</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          {/* Toggle subjects */}
-                          <button
-                            onClick={() => setExpanded(isExpanded ? null : cls._id)}
-                            className="p-1.5 rounded-lg hover:bg-blue-50 text-secondary-500 hover:text-blue-600 transition-colors"
-                            title={isExpanded ? 'Hide subjects' : `View subjects (${clsSubs.length})`}
-                          >
-                            {isExpanded ? <FiChevronUp size={14} /> : <FiBook size={14} />}
-                          </button>
-                          <button onClick={() => openEdit(cls)} className="p-1.5 rounded-lg hover:bg-secondary-100 text-secondary-500 hover:text-primary-600 transition-colors">
-                            <FiEdit2 size={14} />
-                          </button>
-                          <button onClick={() => { setDeleting(cls); setShowConfirm(true); }} className="p-1.5 rounded-lg hover:bg-red-50 text-secondary-500 hover:text-red-500 transition-colors">
-                            <FiTrash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-
-                    {/* Expandable subjects row */}
-                    {isExpanded && (
-                      <tr key={`${cls._id}-subjects`} className="bg-blue-50/50 border-t border-blue-100">
-                        <td colSpan={7} className="px-6 py-3">
-                          <p className="text-xs font-semibold text-secondary-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                            <FiBook size={12} className="text-primary-500" /> Subjects in {cls.name} {cls.section}
-                          </p>
-                          {clsSubs.length === 0 ? (
-                            <p className="text-xs text-secondary-400 italic">No subjects assigned to this class yet. Go to Subjects to add them.</p>
+          <Table
+            columns={[
+              { key: 'name', label: 'Class Name', render: (val) => <span className="font-semibold text-secondary-800">{val}</span> },
+              { key: 'section', label: 'Section', render: (val) => val || '—' },
+              { key: 'academicYear', label: 'Session' },
+              { key: 'classTeacherId', label: 'Class Teacher', render: (val) => val?.name ? <span className="font-medium">{val.name}</span> : <Badge variant="gray">Not assigned</Badge> },
+              { key: 'studentCount', label: 'Students', render: (val) => <Badge variant="info">{val ?? 0}</Badge> },
+              { key: 'isActive', label: 'Status', render: (val) => <Badge variant={val ? 'success' : 'danger'}>{val ? 'Active' : 'Inactive'}</Badge> },
+              { key: 'actions', label: '', render: (_, cls) => {
+                  const clsSubs = classSubjects(cls._id);
+                  const isExpanded = expanded === cls._id;
+                  return (
+                    <div className="flex items-center gap-1 justify-end">
+                      <button
+                        onClick={() => setExpanded(isExpanded ? null : cls._id)}
+                        className="p-1.5 rounded-lg hover:bg-blue-50 text-secondary-500 hover:text-blue-600 transition-colors"
+                        title={isExpanded ? 'Hide subjects' : `View subjects (${clsSubs.length})`}
+                      >
+                        {isExpanded ? <FiChevronUp size={14} /> : <FiBook size={14} />}
+                      </button>
+                      <button onClick={() => openEdit(cls)} className="p-1.5 rounded-lg hover:bg-secondary-100 text-secondary-500 hover:text-primary-600 transition-colors">
+                        <FiEdit2 size={14} />
+                      </button>
+                      <button onClick={() => { setDeleting(cls); setShowConfirm(true); }} className="p-1.5 rounded-lg hover:bg-red-50 text-secondary-500 hover:text-red-500 transition-colors">
+                        <FiTrash2 size={14} />
+                      </button>
+                    </div>
+                  );
+                } 
+              }
+            ]}
+            data={classes}
+            expandableRow={(cls) => {
+              if (expanded !== cls._id) return null;
+              const clsSubs = classSubjects(cls._id);
+              return (
+                <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+                  <p className="text-xs font-semibold text-secondary-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                    <FiBook size={12} className="text-primary-500" /> Subjects in {cls.name} {cls.section}
+                  </p>
+                  {clsSubs.length === 0 ? (
+                    <p className="text-xs text-secondary-400 italic">No subjects assigned to this class yet. Go to Subjects to add them.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {clsSubs.map((s) => (
+                        <div key={s._id} className="flex items-center gap-2 bg-white border border-secondary-200 rounded-xl px-3 py-1.5">
+                          <span className="text-xs font-bold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded font-mono">{s.code}</span>
+                          <span className="text-xs font-medium text-secondary-800">{s.name}</span>
+                          {s.teacherId ? (
+                            <span className="text-xs text-secondary-400">· {s.teacherId.name}</span>
                           ) : (
-                            <div className="flex flex-wrap gap-2">
-                              {clsSubs.map((s) => (
-                                <div key={s._id} className="flex items-center gap-2 bg-white border border-secondary-200 rounded-xl px-3 py-1.5">
-                                  <span className="text-xs font-bold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded font-mono">{s.code}</span>
-                                  <span className="text-xs font-medium text-secondary-800">{s.name}</span>
-                                  {s.teacherId ? (
-                                    <span className="text-xs text-secondary-400">· {s.teacherId.name}</span>
-                                  ) : (
-                                    <span className="text-xs text-red-400 italic">· Unassigned</span>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
+                            <span className="text-xs text-red-400 italic">· Unassigned</span>
                           )}
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                );
-              })}
-            </tbody>
-          </table>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }}
+          />
         </div>
       )}
 
       {/* Add/Edit Modal */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Class' : 'Add New Class'}>
         <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="input-label">Class Name *</label>
               <input className="input-field" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. JSS 1" required />

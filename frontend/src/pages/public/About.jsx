@@ -59,7 +59,7 @@ export default function About() {
               <p className="text-secondary-600 leading-relaxed mb-6">
                 Our approach blends rigorous academics with character formation, digital literacy, and extracurricular development — producing graduates who are confident, competent, and compassionate.
               </p>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-primary-50 rounded-2xl p-4 border border-primary-100">
                   <p className="text-2xl font-bold text-primary-600 mb-1">🎯 Mission</p>
                   <p className="text-sm text-secondary-600">To provide quality, holistic education that empowers African youth.</p>
@@ -106,7 +106,7 @@ export default function About() {
             <h2 className="text-3xl font-bold text-secondary-800">Meet the Team</h2>
             <p className="text-secondary-500 mt-3 max-w-lg mx-auto">Our experienced leadership team is dedicated to academic excellence and student wellbeing.</p>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-5">
             {TEAM.map((m) => (
               <div key={m.name} className="text-center group">
                 <div className="w-20 h-20 bg-gradient-to-br from-secondary-700 to-secondary-800 rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:from-primary-500 group-hover:to-primary-600 transition-all duration-300 shadow-card">

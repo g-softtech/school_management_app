@@ -8,7 +8,7 @@ function StatTile() {
   return (
     <div className="card animate-pulse flex items-center gap-3">
       <div className="w-10 h-10 bg-secondary-100 rounded-xl flex-shrink-0" />
-      <div className="flex-1 space-y-2">
+      <div className="flex-1 min-w-0 space-y-2">
         <div className="h-2.5 bg-secondary-100 rounded w-20" />
         <div className="h-5 bg-secondary-100 rounded w-14" />
       </div>
@@ -36,7 +36,7 @@ function ChartArea({ height = 220 }) {
       <div className="h-4 bg-secondary-100 rounded w-32 mb-4" />
       <div className="flex items-end gap-2 pb-4" style={{ height }}>
         {[55, 80, 65, 90, 45, 75, 60, 85].map((h, i) => (
-          <div key={i} className="flex-1 bg-secondary-100 rounded-t-lg" style={{ height: `${h}%` }} />
+          <div key={i} className="flex-1 min-w-0 bg-secondary-100 rounded-t-lg" style={{ height: `${h}%` }} />
         ))}
       </div>
     </div>
@@ -48,7 +48,7 @@ function ListItem() {
   return (
     <div className="flex items-center gap-3 animate-pulse p-2.5">
       <div className="w-9 h-9 bg-secondary-100 rounded-xl flex-shrink-0" />
-      <div className="flex-1 space-y-1.5">
+      <div className="flex-1 min-w-0 space-y-1.5">
         <div className="h-3 bg-secondary-100 rounded w-3/4" />
         <div className="h-2.5 bg-secondary-100 rounded w-1/2" />
       </div>
@@ -71,11 +71,11 @@ export default function PageSkeleton({ type = 'dashboard', statCols = 4, rows = 
               <div key={i} className="h-3 bg-secondary-200 rounded w-16" />
             ))}
           </div>
-          <table className="w-full">
+          <div className="overflow-x-auto w-full max-w-full"><table className="w-full">
             <tbody className="divide-y divide-secondary-50">
               {[...Array(rows)].map((_, i) => <TableRow key={i} />)}
             </tbody>
-          </table>
+          </table></div>
         </div>
       </div>
     );
