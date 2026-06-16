@@ -29,14 +29,12 @@ module.exports = {
   // Paystack
   PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY,
   PAYSTACK_PUBLIC_KEY: process.env.PAYSTACK_PUBLIC_KEY,
-  PAYSTACK_CALLBACK_URL: process.env.PAYSTACK_CALLBACK_URL,
 
   // AI
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   GROQ_API_KEY: process.env.GROQ_API_KEY,
 
   // App
-  CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
-  // CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:3000',
+  CLIENT_URL: process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://smartschool-app.onrender.com' : 'http://localhost:5173'),
   UPLOAD_DIR: process.env.UPLOAD_DIR || 'src/uploads',
 };

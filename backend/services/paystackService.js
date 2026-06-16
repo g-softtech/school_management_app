@@ -1,7 +1,8 @@
 const https = require('https');
 const crypto = require('crypto');
+const env = require('../config/env');
 
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
+const PAYSTACK_SECRET = env.PAYSTACK_SECRET_KEY;
 const PAYSTACK_BASE   = 'api.paystack.co';
 
 // Generic Paystack API caller
@@ -46,7 +47,7 @@ var initializePayment = function(email, amountInKobo, reference, metadata) {
     amount:    amountInKobo,
     reference: reference,
     metadata:  metadata || {},
-    callback_url: process.env.PAYSTACK_CALLBACK_URL,
+    callback_url: `${env.CLIENT_URL}/payment/verify`,
   });
 };
 
