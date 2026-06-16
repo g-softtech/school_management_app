@@ -45,7 +45,7 @@ function PasswordStrength({ password }) {
 }
 
 export default function ChangePassword() {
-  const { user, logout } = useAuth();
+  const { user, logoutUser } = useAuth();
   const navigate         = useNavigate();
 
   const [form, setForm] = useState({
@@ -77,8 +77,7 @@ export default function ChangePassword() {
       toast.success('Password changed successfully!');
       // Log out after 2 seconds so they re-login with new password
       setTimeout(() => {
-        logout();
-        navigate('/login', { replace: true });
+        logoutUser();
       }, 2500);
     } catch (err) {
       toast.error(getErrorMessage(err));

@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { FiMenu, FiSearch, FiX, FiLogOut, FiShield, FiUser, FiChevronDown } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { logoutUser } from '../../services/authService';
 import { getInitials } from '../../utils/helpers';
 import NotificationBell from '../common/NotificationBell';
 
@@ -14,7 +13,7 @@ const ROLE_CHANGE_PASSWORD = {
 };
 
 export default function Topbar({ onMenuClick, pageTitle }) {
-  const { user, logout }        = useAuth();
+  const { user, logoutUser }    = useAuth();
   const navigate                = useNavigate();
   const [showSearch, setShowSearch] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -32,9 +31,7 @@ export default function Topbar({ onMenuClick, pageTitle }) {
   }, [showProfile]);
 
   const handleLogout = async () => {
-    try { await logoutUser(); } catch {}
-    navigate('/', { replace: true });
-    setTimeout(() => logout(), 0);
+    await logoutUser();
   };
 
   const handleChangePassword = () => {

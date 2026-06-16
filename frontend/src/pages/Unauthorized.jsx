@@ -10,7 +10,7 @@ const VALID_ROLES = ['admin', 'teacher', 'student', 'parent'];
 
 export default function Unauthorized() {
   const navigate    = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logoutUser } = useAuth();
 
   const isValidRole = user && VALID_ROLES.includes(user.role);
   const home        = isValidRole ? ROLE_ROUTES[user.role] : null;
@@ -20,8 +20,7 @@ export default function Unauthorized() {
       navigate(home, { replace: true });
     } else {
       // Invalid / stale role — clear everything and go to login
-      logout();
-      navigate('/login', { replace: true });
+      logoutUser();
     }
   };
 

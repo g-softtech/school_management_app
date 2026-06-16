@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { getMe, refreshToken as refreshTokenApi } from '../services/authService';
+import { getMe, refreshToken as refreshTokenApi, logoutUser as apiLogout } from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -15,6 +16,7 @@ export function AuthProvider({ children }) {
   const refreshTimer  = useRef(null);
   const warnTimer     = useRef(null);
   const tokenIssuedAt = useRef(null);
+  const navigate      = useNavigate();
 
   // ── Rehydrate from localStorage on mount ──────────────────────────────────
   useEffect(() => {
@@ -93,14 +95,16 @@ export function AuthProvider({ children }) {
   }, [scheduleRefresh]);
 
   // ── Logout ─────────────────────────────────────────────────────────────────
-  const logout = useCallback(() => {
+  const logoutUser = useCallback(async () => {
+    try { await apiLogout(); } catch {}
     clearTimers();
     localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
     toast.dismiss('session-warning');
-  }, [clearTimers]);
+    navigate('/', { replace: true });
+  }, [clearTimers, navigate]);
 
   // ── Refresh user profile from server ──────────────────────────────────────
   const refreshUser = useCallback(async () => {
@@ -110,9 +114,9 @@ export function AuthProvider({ children }) {
       localStorage.setItem('user', JSON.stringify(updated));
       setUser(updated);
     } catch {
-      logout();
+      logoutUser();
     }
-  }, [logout]);
+  }, [logoutUser]);
 
   // ── Start refresh timer when user is set on mount (persisted login) ────────
   useEffect(() => {
@@ -130,16 +134,16 @@ export function AuthProvider({ children }) {
       (error) => {
         if (error.response?.status === 401 && user) {
           clearTimers();
-          logout();
+          logoutUser();
         }
         return Promise.reject(error);
       }
     );
     return () => api.interceptors.response.eject(interceptor);
-  }, [user, logout, clearTimers]);
+  }, [user, logoutUser, clearTimers]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logoutUser, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

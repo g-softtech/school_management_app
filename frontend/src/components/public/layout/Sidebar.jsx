@@ -7,7 +7,6 @@ import {
   FiActivity, FiList, FiUserCheck, FiPercent
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
-import { logoutUser } from '../../services/authService';
 import { getInitials } from '../../utils/helpers';
 import { APP_NAME } from '../../utils/constants';
 
@@ -55,15 +54,12 @@ const ROLE_LABELS = {
 };
 
 export default function Sidebar({ isOpen, onClose }) {
-  const { user, logout } = useAuth();
+  const { user, logoutUser } = useAuth();
   const navigate         = useNavigate();
   const navItems         = NAV_ITEMS[user?.role] || [];
 
   const handleLogout = async () => {
-    try { await logoutUser(); } catch {}
-    logout();
-    toast.success('Logged out successfully');
-    navigate('/login', { replace: true });
+    await logoutUser();
   };
 
   return (
