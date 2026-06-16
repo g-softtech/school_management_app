@@ -4,6 +4,7 @@ import {
   FiCreditCard, FiSearch, FiPlus, FiCheck, FiX,
   FiEye, FiDownload, FiFilter, FiRefreshCw,
   FiDollarSign, FiClock, FiCheckCircle, FiAlertCircle,
+  FiPrinter, FiEdit2, FiTrash2
 } from 'react-icons/fi';
 import Modal from '../../components/common/Modal';
 import Badge from '../../components/common/Badge';
@@ -340,18 +341,10 @@ export default function AdminPayments() {
                   </button>
                 )}
                 {p.status === 'awaiting_approval' && (
-                  <button onClick={() => { setApproving(p); setShowApproveModal(true); }} title="Review & Approve" className="p-1.5 hover:bg-amber-100 rounded-lg text-amber-600">
+                  <button onClick={() => { setActivePayment(p); setShowApprove(true); }} title="Review & Approve" className="p-1.5 hover:bg-amber-100 rounded-lg text-amber-600">
                     <FiCheckCircle size={14} />
                   </button>
                 )}
-                {p.status !== 'completed' && (
-                  <button onClick={() => openEdit(p)} title="Edit Status" className="p-1.5 hover:bg-secondary-100 rounded-lg text-secondary-500">
-                    <FiEdit2 size={14} />
-                  </button>
-                )}
-                <button onClick={() => { setDeleting(p); setShowConfirm(true); }} title="Delete" className="p-1.5 hover:bg-red-50 rounded-lg text-red-400">
-                  <FiTrash2 size={14} />
-                </button>
               </div>
             )
           }
