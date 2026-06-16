@@ -6,7 +6,8 @@ const morgan       = require('morgan');
 const cookieParser = require('cookie-parser');
 const path         = require('path');
 
-const { CLIENT_URL, NODE_ENV } = require('./config/env');
+const CLIENT_URL = process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://smartschool-app.onrender.com' : 'http://localhost:5173');
+const NODE_ENV = process.env.NODE_ENV || 'development';
 const errorHandler  = require('./src/middleware/errorHandler');
 const ApiError      = require('./src/utils/ApiError');
 const auditLogger   = require('./src/middleware/auditLogger');

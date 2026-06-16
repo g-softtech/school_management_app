@@ -1,8 +1,7 @@
 const https = require('https');
 const crypto = require('crypto');
-const env = require('../config/env');
-
-const PAYSTACK_SECRET = env.PAYSTACK_SECRET_KEY;
+const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
+const CLIENT_URL = process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://smartschool-app.onrender.com' : 'http://localhost:5173');
 const PAYSTACK_BASE   = 'api.paystack.co';
 
 // Generic Paystack API caller
@@ -47,7 +46,7 @@ var initializePayment = function(email, amountInKobo, reference, metadata) {
     amount:    amountInKobo,
     reference: reference,
     metadata:  metadata || {},
-    callback_url: `${env.CLIENT_URL}/payment/verify`,
+    callback_url: `${CLIENT_URL}/payment/verify`,
   });
 };
 

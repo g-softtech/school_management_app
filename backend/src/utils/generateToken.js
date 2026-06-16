@@ -1,7 +1,10 @@
 // Lives at: backend/src/utils/generateToken.js
 // config/ is at backend/config/ — go up two levels (utils → src → backend) then into config/
 const jwt = require('jsonwebtoken');
-const { JWT_SECRET, JWT_EXPIRES_IN, REFRESH_TOKEN_SECRET, REFRESH_EXPIRES_IN } = require('../../config/env');
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
+const REFRESH_EXPIRES_IN = process.env.REFRESH_EXPIRES_IN || '30d';
 
 const generateAccessToken = (user) => {
   return jwt.sign(

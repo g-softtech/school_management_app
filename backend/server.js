@@ -4,8 +4,12 @@ require('dotenv').config();
 
 const app = require('./app');
 const connectDB = require('./config/db');
-const { PORT, NODE_ENV } = require('./config/env');
+const PORT = process.env.PORT || 5000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
+if (!process.env.JWT_SECRET) {
+  console.error("⚠️ WARNING: Missing JWT_SECRET in environment variables.");
+}
 // ─── Handle uncaught synchronous exceptions ──────────────────────────────────
 process.on('uncaughtException', (err) => {
   console.error('💥  UNCAUGHT EXCEPTION — shutting down...');

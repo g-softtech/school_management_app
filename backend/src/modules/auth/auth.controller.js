@@ -2,7 +2,7 @@ const User = require('../../models/User');
 const ApiError = require('../../utils/ApiError');
 const catchAsync = require('../../utils/catchAsync');
 const { sendTokenResponse, verifyRefreshToken, generateAccessToken } = require('../../utils/generateToken');
-const env = require('../../config/env');
+const CLIENT_URL = process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://smartschool-app.onrender.com' : 'http://localhost:5173');
 
 exports.register = catchAsync(async function(req, res, next) {
   var name = req.body.name, email = req.body.email, password = req.body.password, role = req.body.role;
@@ -93,7 +93,7 @@ exports.forgotPassword = catchAsync(async function(req, res, next) {
   await user.save({ validateBeforeSave: false });
 
   // In production: send email. For now we return the token in dev mode.
-  var resetUrl = env.CLIENT_URL + '/reset-password/' + resetToken;
+  var resetUrl = CLIENT_URL + '/reset-password/' + resetToken;
 
   if (process.env.NODE_ENV === 'production') {
     // TODO: integrate nodemailer or Sendgrid here

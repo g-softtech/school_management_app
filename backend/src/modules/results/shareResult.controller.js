@@ -3,7 +3,7 @@ const Result = require('../../models/Result');
 const Student= require('../../models/Student');
 const ApiError   = require('../../utils/ApiError');
 const catchAsync = require('../../utils/catchAsync');
-const env = require('../../../config/env');
+const CLIENT_URL = process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://smartschool-app.onrender.com' : 'http://localhost:5173');
 
 // POST /api/results/share-token — generates a shareable token
 // Student or Admin
@@ -31,7 +31,7 @@ exports.generateShareToken = catchAsync(async function(req, res, next) {
     { expiresIn: '24h' }
   );
 
-  var shareUrl = env.CLIENT_URL + '/results/shared/' + token;
+  var shareUrl = CLIENT_URL + '/results/shared/' + token;
 
   res.status(200).json({
     success:  true,

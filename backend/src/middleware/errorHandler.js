@@ -1,4 +1,4 @@
-const { NODE_ENV } = require('../../config/env');
+const NODE_ENV = process.env.NODE_ENV || 'development';
 const ApiError = require('../utils/ApiError');
 
 const handleCastError = (err) =>
