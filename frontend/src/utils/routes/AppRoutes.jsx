@@ -46,6 +46,7 @@ import AdminPromote      from '../../pages/admin/Promote';
 // Teacher pages
 import TeacherDashboard   from '../../pages/teacher/Dashboard';
 import TeacherMyClasses   from '../../pages/teacher/MyClasses';
+import TeacherAttendance  from '../../pages/teacher/Attendance';
 import TeacherLessonNotes from '../../pages/teacher/LessonNotes';
 import TeacherAssignments from '../../pages/teacher/Assignments';
 import TeacherResults     from '../../pages/teacher/Results';
@@ -129,6 +130,7 @@ export default function AppRoutes() {
         <Route element={<TeacherLayout />}>
           <Route path="/teacher"                element={<TeacherDashboard />} />
           <Route path="/teacher/classes"        element={<TeacherMyClasses />} />
+          <Route path="/teacher/attendance"     element={<TeacherAttendance />} />
           <Route path="/teacher/lesson-notes"   element={<TeacherLessonNotes />} />
           <Route path="/teacher/assignments"    element={<TeacherAssignments />} />
           <Route path="/teacher/results"        element={<TeacherResults />} />

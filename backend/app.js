@@ -62,6 +62,7 @@ app.use('/api/lesson-notes',   require('./src/modules/lessonNotes/lessonNotes.ro
 app.use('/api/assignments',    require('./src/modules/assignments/assignments.routes'));
 app.use('/api/submissions',    require('./src/modules/submissions/submissions.routes'));
 app.use('/api/weekly-planner', require('./src/modules/weeklyPlanner/weeklyPlanner.routes'));
+app.use('/api/attendance',     require('./src/modules/attendance/attendance.routes'));
 
 // ── Extension routes ──────────────────────────────────────────────────────────
 app.use('/api/notifications',  require('./src/modules/notifications/notifications.routes'));

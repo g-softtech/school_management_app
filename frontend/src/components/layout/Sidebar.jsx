@@ -5,7 +5,7 @@ import {
   FiBarChart2, FiCreditCard, FiMessageSquare,
   FiCalendar, FiFileText, FiAward, FiLogOut, FiCpu,
   FiActivity, FiList, FiUserCheck, FiGrid, FiArrowRight,
-  FiPercent, FiBell, FiInbox, FiDownload,
+  FiPercent, FiBell, FiInbox, FiDownload, FiCheckSquare,
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { getInitials } from '../../utils/helpers';
@@ -33,6 +33,7 @@ const NAV_ITEMS = {
   teacher: [
     { to: '/teacher',                    icon: FiHome,          label: 'Dashboard'      },
     { to: '/teacher/classes',            icon: FiBook,          label: 'My Classes'     },
+    { to: '/teacher/attendance',         icon: FiCheckSquare,   label: 'Attendance'     },
     { to: '/teacher/lesson-notes',       icon: FiFileText,      label: 'Lesson Notes'   },
     { to: '/teacher/assignments',        icon: FiClipboard,     label: 'Assignments'    },
     { to: '/teacher/results',            icon: FiAward,         label: 'Results'        },
