@@ -38,3 +38,8 @@ module.exports = {
   CLIENT_URL: process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://smartschool-app.onrender.com' : 'http://localhost:5173'),
   UPLOAD_DIR: process.env.UPLOAD_DIR || 'src/uploads',
 };
+
+// Production Guard
+if (module.exports.NODE_ENV === 'production' && module.exports.CLIENT_URL.includes('localhost')) {
+  throw new Error('Invalid production CLIENT_URL: localhost detected. Please define CLIENT_URL in environment variables.');
+}

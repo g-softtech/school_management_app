@@ -3,6 +3,7 @@ const Result = require('../../models/Result');
 const Student= require('../../models/Student');
 const ApiError   = require('../../utils/ApiError');
 const catchAsync = require('../../utils/catchAsync');
+const env = require('../../../config/env');
 
 // POST /api/results/share-token — generates a shareable token
 // Student or Admin
@@ -30,7 +31,7 @@ exports.generateShareToken = catchAsync(async function(req, res, next) {
     { expiresIn: '24h' }
   );
 
-  var shareUrl = (process.env.CLIENT_URL || 'http://localhost:3000') + '/results/shared/' + token;
+  var shareUrl = env.CLIENT_URL + '/results/shared/' + token;
 
   res.status(200).json({
     success:  true,
