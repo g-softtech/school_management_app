@@ -57,6 +57,28 @@ export function downloadResultsPDF({ student, results = [], summary = null, term
     </div>
   ` : '';
 
+  const attendanceSection = summary?.attendance ? `
+    <div style="display:flex;gap:16px;margin:12px 0 24px 0;flex-wrap:wrap;border-top:1px solid #e5e7eb;padding-top:12px">
+      <div style="flex:100%;font-size:12px;font-weight:600;color:#111;text-transform:uppercase;margin-bottom:-4px">Attendance Summary</div>
+      <div style="background:#f3f4f6;padding:8px 16px;border-radius:8px;text-align:center;flex:1">
+        <div style="font-size:11px;color:#6b7280">Valid Days</div>
+        <div style="font-size:20px;font-weight:700;color:#111">${summary.attendance.validDays}</div>
+      </div>
+      <div style="background:#dcfce7;padding:8px 16px;border-radius:8px;text-align:center;flex:1">
+        <div style="font-size:11px;color:#15803d">Days Present</div>
+        <div style="font-size:20px;font-weight:700;color:#15803d">${summary.attendance.presentDays + summary.attendance.lateDays}</div>
+      </div>
+      <div style="background:#fee2e2;padding:8px 16px;border-radius:8px;text-align:center;flex:1">
+        <div style="font-size:11px;color:#dc2626">Days Absent</div>
+        <div style="font-size:20px;font-weight:700;color:#dc2626">${summary.attendance.absentDays}</div>
+      </div>
+      <div style="background:#eff6ff;padding:8px 16px;border-radius:8px;text-align:center;flex:1">
+        <div style="font-size:11px;color:#1d4ed8">Attendance</div>
+        <div style="font-size:20px;font-weight:700;color:#1d4ed8">${summary.attendance.attendancePercentage}%</div>
+      </div>
+    </div>
+  ` : '';
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -185,6 +207,7 @@ export function downloadResultsPDF({ student, results = [], summary = null, term
       </div>
 
       ${summarySection}
+      ${attendanceSection}
 
       ${results.length === 0 ? '<p style="text-align:center;color:#9ca3af;padding:24px">No results found for this term.</p>' : `
         <table>

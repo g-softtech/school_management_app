@@ -2,10 +2,13 @@ const Result  = require('../../models/Result');
 const Student = require('../../models/Student');
 const Subject = require('../../models/Subject');
 const Class   = require('../../models/Class');
+const Attendance = require('../../models/Attendance');
+const mongoose = require('mongoose');
 const ApiError   = require('../../utils/ApiError');
 const catchAsync = require('../../utils/catchAsync');
 const paginate   = require('../../utils/paginate');
 const { getGrade, isPassing } = require('../../../services/gradeEngine');
+const { getStudentAttendanceStats } = require('../../utils/attendanceHelper');
 
 // Helper — compute total, grade, remark from ca + exam
 function computeResult(ca, exam) {
@@ -13,6 +16,7 @@ function computeResult(ca, exam) {
   var g = getGrade(total);
   return { total: total, grade: g.grade, remark: g.remark };
 }
+
 
 // ─── Upload single result ─────────────────────────────────────────────────────
 exports.uploadResult = catchAsync(async function(req, res, next) {
@@ -168,6 +172,8 @@ exports.getStudentResults = catchAsync(async function(req, res, next) {
 
   var average = results.length > 0 ? Number((totalScore / results.length).toFixed(1)) : 0;
 
+  var attendanceStats = await getStudentAttendanceStats(studentId, term, session);
+
   res.status(200).json({
     success: true,
     student: { name: student.userId.name, admissionNumber: student.admissionNumber },
@@ -177,6 +183,7 @@ exports.getStudentResults = catchAsync(async function(req, res, next) {
       failed:  results.length - passCount,
       average: average,
       totalScore: totalScore,
+      attendance: attendanceStats
     },
     data: results,
   });

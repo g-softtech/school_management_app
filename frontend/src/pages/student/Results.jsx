@@ -108,6 +108,31 @@ export default function StudentResults() {
         </div>
       )}
 
+      {/* Attendance Summary */}
+      {!loading && summary?.attendance && (
+        <div className="card">
+          <h3 className="text-sm font-semibold text-secondary-800 mb-3 border-b border-secondary-100 pb-2">Attendance Summary</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="text-center">
+              <p className="text-xs text-secondary-500 mb-1">Valid Days</p>
+              <p className="text-xl font-bold text-secondary-800">{summary.attendance.validDays}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-secondary-500 mb-1">Days Present</p>
+              <p className="text-xl font-bold text-green-600">{summary.attendance.presentDays + summary.attendance.lateDays}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-secondary-500 mb-1">Days Absent</p>
+              <p className="text-xl font-bold text-red-500">{summary.attendance.absentDays}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-secondary-500 mb-1">Attendance</p>
+              <p className="text-xl font-bold text-blue-600">{summary.attendance.attendancePercentage}%</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Result table */}
       <div className="card overflow-hidden p-0 max-w-[100vw]" ref={printRef}>
         <div className="p-5 border-b border-secondary-100">

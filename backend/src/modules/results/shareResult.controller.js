@@ -3,6 +3,7 @@ const Result = require('../../models/Result');
 const Student= require('../../models/Student');
 const ApiError   = require('../../utils/ApiError');
 const catchAsync = require('../../utils/catchAsync');
+const { getStudentAttendanceStats } = require('../../utils/attendanceHelper');
 const CLIENT_URL = process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://smartschool-app.onrender.com' : 'http://localhost:5173');
 
 // POST /api/results/share-token — generates a shareable token
@@ -70,6 +71,8 @@ exports.viewSharedResult = catchAsync(async function(req, res, next) {
     if (['A1','B2','B3','C4','C5','C6'].includes(r.grade)) passCount++;
   });
 
+  var attendanceStats = await getStudentAttendanceStats(student._id, decoded.term, decoded.session);
+
   res.status(200).json({
     success: true,
     student: {
@@ -85,6 +88,7 @@ exports.viewSharedResult = catchAsync(async function(req, res, next) {
       average: results.length > 0 ? Number((totalScore / results.length).toFixed(1)) : 0,
       passed:  passCount,
       failed:  results.length - passCount,
+      attendance: attendanceStats
     },
     results: results,
   });

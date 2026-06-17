@@ -1,4 +1,5 @@
 const Attendance = require('../../models/Attendance');
+const redis = require('../../config/redis');
 
 // @desc    Get attendance for a specific class and date
 // @route   GET /api/attendance
@@ -63,6 +64,9 @@ exports.saveAttendance = async (req, res) => {
       session: querySession
     });
 
+    // Capture previous student IDs in case any were removed in this update
+    const previousStudentIds = attendance ? attendance.records.map(r => r.studentId.toString()) : [];
+
     if (attendance) {
       // Update existing
       attendance.records = records;
@@ -78,6 +82,25 @@ exports.saveAttendance = async (req, res) => {
         recordedBy: req.user._id,
         records
       });
+    }
+
+    // Cache Invalidation
+    try {
+      // Invalidate both new studentIds and any previous ones that may have been removed
+      const allIdsToInvalidate = new Set([
+        ...studentIds.map(id => id.toString()),
+        ...previousStudentIds
+      ]);
+
+      if (allIdsToInvalidate.size > 0) {
+        const pipeline = redis.pipeline();
+        allIdsToInvalidate.forEach(id => {
+          pipeline.del(`attendance:stats:${querySession}:${queryTerm}:${id}`);
+        });
+        await pipeline.exec();
+      }
+    } catch (err) {
+      console.warn('[REDIS] Failed to invalidate cache on attendance update:', err.message);
     }
 
     res.status(200).json({
