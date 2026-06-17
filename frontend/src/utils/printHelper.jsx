@@ -54,7 +54,7 @@ export const printReportCards = (cardsData = [], title = 'Print Report Cards') =
       </head>
       <body>
         <div class="no-print" style="text-align: center; margin-bottom: 20px;">
-          <button onclick="window.print()" style="padding: 10px 20px; background: #C9A227; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">
+          <button onclick="window.print()" style="padding: 10px 20px; background: #C9A227; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             🖨️ Print / Save PDF
           </button>
         </div>
@@ -68,7 +68,6 @@ export const printReportCards = (cardsData = [], title = 'Print Report Cards') =
   
   win.onload = () => {
     win.focus();
-    // Auto print
-    setTimeout(() => win.print(), 500);
+    // Do NOT automatically launch browser print dialog. User should review first.
   };
 };
