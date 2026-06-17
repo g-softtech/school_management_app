@@ -1,5 +1,6 @@
 const Attendance = require('../../models/Attendance');
 const redis = require('../../config/redis');
+const mongoose = require('mongoose');
 
 // @desc    Get attendance for a specific class and date
 // @route   GET /api/attendance
@@ -10,6 +11,14 @@ exports.getAttendance = async (req, res) => {
 
     if (!classId || !date) {
       return res.status(400).json({ success: false, message: 'Class ID and date are required' });
+    }
+
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ success: false, message: 'Invalid class ID' });
     }
 
     const queryTerm = term || (req.user && req.user.term);
@@ -52,6 +61,14 @@ exports.saveAttendance = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ success: false, message: 'Invalid class ID' });
+    }
+
     const queryTerm = term || (req.user && req.user.term);
     const querySession = session || (req.user && req.user.session);
 
@@ -66,7 +83,14 @@ exports.saveAttendance = async (req, res) => {
     queryDate.setUTCHours(0, 0, 0, 0);
 
     // Validate records
-    const studentIds = records.map(r => r.studentId);
+    const studentIds = [];
+    for (let r of records) {
+      if (!r.studentId || !mongoose.Types.ObjectId.isValid(r.studentId)) {
+        return res.status(400).json({ success: false, message: 'Invalid student ID in records' });
+      }
+      studentIds.push(r.studentId);
+    }
+    
     if (new Set(studentIds).size !== studentIds.length) {
       return res.status(400).json({ success: false, message: 'Duplicate student IDs found in records' });
     }
