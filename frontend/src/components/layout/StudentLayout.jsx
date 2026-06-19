@@ -17,6 +17,7 @@ const PAGE_TITLES = {
   '/student/planner':         'Weekly Planner',
   '/student/ai':              'AI Generator',
   '/student/analytics':       'My Progress',
+  '/student/billing':         'Billing & Payments',
 };
 
 export default function StudentLayout() {

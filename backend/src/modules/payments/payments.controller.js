@@ -38,21 +38,39 @@ async function allocatePaymentToBill(payment, ledgerServices, dbSession) {
 
   let remaining = payment.amount;
 
-  // 1. Exact Match Priority
-  if (payment.feeType && payment.feeType !== 'all') {
-    const targetItem = bill.items.find(i => i.feeType === payment.feeType && i.status !== 'waived');
-    if (targetItem) {
-      const itemBalance = Math.max(0, targetItem.netAmount - targetItem.paid);
-      if (itemBalance > 0) {
-        const alloc = Math.min(itemBalance, remaining);
-        targetItem.paid += alloc;
-        remaining -= alloc;
+  // 1. If explicit allocations are provided, use them as strictly advisory intent.
+  // The ledger still ensures we don't over-allocate against the true item balance.
+  if (payment.allocations && payment.allocations.length > 0) {
+    for (const alloc of payment.allocations) {
+      if (remaining <= 0) break;
+      const targetItem = bill.items.id(alloc.itemId);
+      if (targetItem && targetItem.status !== 'waived') {
+        const itemBalance = Math.max(0, targetItem.netAmount - targetItem.paid);
+        if (itemBalance > 0) {
+          // Strict validation: cap allocation at remaining amount, item balance, and advisory amount
+          const amountToAllocate = Math.min(itemBalance, remaining, alloc.amount);
+          targetItem.paid += amountToAllocate;
+          remaining -= amountToAllocate;
+        }
       }
     }
-  }
-
-  // 2. Top-to-bottom for any remaining funds
+  } 
+  // 2. Legacy fallback: Top-to-bottom for any remaining funds or if no allocations provided
   if (remaining > 0) {
+    // If it's a specific fee type without explicit allocations array
+    if (payment.feeType && payment.feeType !== 'all' && payment.feeType !== 'multiple') {
+      const targetItem = bill.items.find(i => i.feeType === payment.feeType && i.status !== 'waived');
+      if (targetItem) {
+        const itemBalance = Math.max(0, targetItem.netAmount - targetItem.paid);
+        if (itemBalance > 0) {
+          const alloc = Math.min(itemBalance, remaining);
+          targetItem.paid += alloc;
+          remaining -= alloc;
+        }
+      }
+    }
+    
+    // Top-to-bottom for true remaining funds
     for (const item of bill.items) {
       if (item.status === 'waived') continue;
       if (remaining <= 0) break;
@@ -81,6 +99,69 @@ async function allocatePaymentToBill(payment, ledgerServices, dbSession) {
       });
     }
   }
+
+  // Snapshot generation moved to finalizeReceiptSnapshot to execute after session commit
+}
+
+// ── Helper: Finalize Receipt Snapshot (Must run AFTER ledger commit) ─────────
+async function finalizeReceiptSnapshot(paymentId) {
+  const payment = await Payment.findById(paymentId).lean();
+  if (!payment || payment.status !== 'paid' || payment.receiptSnapshot) return;
+
+  const bill = await StudentBill.findOne({
+    studentId: payment.studentId,
+    session: payment.session,
+    term: payment.term
+  }).lean();
+
+  if (!bill) return;
+
+  const student = await Student.findById(payment.studentId)
+    .populate('userId', 'name')
+    .populate('classId', 'name')
+    .lean();
+
+  if (!student) return;
+
+  const snapshot = {
+    receiptNo: payment.receiptNumber,
+    student: {
+      studentId: student._id,
+      admissionNo: student.admissionNumber,
+      fullName: student.userId?.name || 'Unknown'
+    },
+    class: {
+      classId: student.classId?._id || null,
+      name: student.classId?.name || 'Unknown'
+    },
+    term: {
+      session: payment.session,
+      term: payment.term
+    },
+    items: bill.items.map(i => ({
+      itemId: i._id,
+      name: i.feeName,
+      feeType: i.feeType,
+      amount: i.netAmount,
+      paid: i.paid
+    })),
+    allocations: payment.allocations || [],
+    summary: {
+      totalAmount: bill.totalAmount,
+      totalPaid: bill.totalPaid,
+      balanceBefore: bill.totalBalance + payment.amount, // Close approximation to prior state
+      balanceAfter: bill.totalBalance
+    },
+    method: payment.paymentMethod,
+    status: 'paid',
+    createdAt: new Date(),
+    snapshotVersion: bill.revision || 0
+  };
+  
+  const crypto = require('crypto');
+  snapshot.snapshotHash = crypto.createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+
+  await Payment.findByIdAndUpdate(paymentId, { receiptSnapshot: snapshot });
 }
 
 // ── Initialize Paystack payment ───────────────────────────────────────────────
@@ -98,11 +179,37 @@ exports.initializePayment = catchAsync(async (req, res, next) => {
   const reference = 'SS-' + Date.now() + '-' + Math.random().toString(36).substr(2,6).toUpperCase();
 
   const splitWalletAmt = req.body.walletAmount ? Number(req.body.walletAmount) : 0;
+  
+  const allocations = req.body.allocations || [];
+
+  if (allocations.length > 0 && billId) {
+    const bill = await StudentBill.findById(billId).populate('items.feeStructureId');
+    if (!bill) return next(new ApiError(404, 'Referenced bill not found'));
+
+    for (const alloc of allocations) {
+      const item = bill.items.find(i => String(i._id) === String(alloc.itemId));
+      if (!item) return next(new ApiError(400, 'Invalid bill item in allocations'));
+      
+      const fs = item.feeStructureId;
+      const remaining = Math.max(0, item.netAmount - item.paid);
+      
+      if (fs && !fs.allowInstallment && alloc.amount < remaining) {
+        return next(new ApiError(400, `Installments are not allowed for ${item.feeName}. Full payment of ${remaining} is required.`));
+      }
+
+      if (fs && fs.allowInstallment && fs.minInstallment > 0) {
+        if (alloc.amount < fs.minInstallment && alloc.amount < remaining) {
+          return next(new ApiError(400, `Payment for ${item.feeName} is below the minimum installment of ${fs.minInstallment}`));
+        }
+      }
+    }
+  }
 
   const paymentIntent = await PaymentIntent.create({
     userId: req.user._id, studentId, billId: billId || null,
     walletAmount: splitWalletAmt, paystackAmount: Number(amount),
-    feeType, term, session, reference, status: 'pending'
+    feeType, term, session, reference, status: 'pending',
+    allocations
   });
 
   const psRes = await psInit(
@@ -143,6 +250,7 @@ exports.verifyPayment = catchAsync(async (req, res, next) => {
 
   const receiptNumber = await generateReceiptNumber();
   let updatedPayment;
+  let snapshotPaymentIds = [];
 
   await ledgerService.withLedgerSession(async (ledger, dbSession) => {
     const lockedIntent = await PaymentIntent.findOneAndUpdate(
@@ -164,11 +272,13 @@ exports.verifyPayment = catchAsync(async (req, res, next) => {
           const walletPayments = await Payment.create([{
             studentId: lockedIntent.studentId, amount: lockedIntent.walletAmount, feeType: lockedIntent.feeType,
             term: lockedIntent.term, session: lockedIntent.session, billId: lockedIntent.billId,
+            allocations: lockedIntent.allocations,
             status: 'paid', paymentMethod: 'wallet', reference: 'WALLET-SPLIT-' + Date.now() + '-' + Math.random().toString(36).substr(2,4).toUpperCase(),
             receiptNumber: receiptNumber2, paidAt: new Date(), notes: 'Split Wallet Finalization'
           }], { session: dbSession });
           
           await allocatePaymentToBill(walletPayments[0], ledger, dbSession);
+          snapshotPaymentIds.push(walletPayments[0]._id);
         } catch (err) {
           console.error('Wallet split finalization failed:', err.message);
         }
@@ -178,14 +288,21 @@ exports.verifyPayment = catchAsync(async (req, res, next) => {
       const paystackPayments = await Payment.create([{
         studentId: lockedIntent.studentId, amount: lockedIntent.paystackAmount, feeType: lockedIntent.feeType,
         term: lockedIntent.term, session: lockedIntent.session, billId: lockedIntent.billId,
+        allocations: lockedIntent.allocations,
         status: 'paid', paymentMethod: 'paystack', reference: lockedIntent.reference,
         receiptNumber, paidAt: new Date(), paystackData: psRes.data
       }], { session: dbSession });
 
       updatedPayment = paystackPayments[0];
       await allocatePaymentToBill(updatedPayment, ledger, dbSession);
+      snapshotPaymentIds.push(updatedPayment._id);
     }
   });
+
+  // Finalize receipt snapshots after ledger commits
+  for (const pid of snapshotPaymentIds) {
+    await finalizeReceiptSnapshot(pid).catch(err => console.error('Snapshot failed:', err.message));
+  }
 
   if (updatedPayment) {
     try {
@@ -236,6 +353,9 @@ exports.webhook = async (req, res) => {
 
     if (req.body.event === 'charge.success') {
       try {
+        let snapshotPaymentIds = [];
+        let updatedPayment;
+
         await ledgerService.withLedgerSession(async (ledger, dbSession) => {
           const intent = await PaymentIntent.findOne({ reference: req.body.data.reference }).session(dbSession);
           if (!intent || intent.status === 'completed') return;
@@ -258,11 +378,13 @@ exports.webhook = async (req, res) => {
                 const walletPayments = await Payment.create([{
                   studentId: lockedIntent.studentId, amount: lockedIntent.walletAmount, feeType: lockedIntent.feeType,
                   term: lockedIntent.term, session: lockedIntent.session, billId: lockedIntent.billId,
+                  allocations: lockedIntent.allocations,
                   status: 'paid', paymentMethod: 'wallet', reference: 'WALLET-SPLIT-' + Date.now() + '-' + Math.random().toString(36).substr(2,4).toUpperCase(),
                   receiptNumber: receiptNumber2, paidAt: new Date(), notes: 'Split Wallet Finalization'
                 }], { session: dbSession });
                 
                 await allocatePaymentToBill(walletPayments[0], ledger, dbSession);
+                snapshotPaymentIds.push(walletPayments[0]._id);
               } catch (err) {
                 console.error('Wallet split finalization failed:', err.message);
               }
@@ -272,12 +394,14 @@ exports.webhook = async (req, res) => {
             const paystackPayments = await Payment.create([{
               studentId: lockedIntent.studentId, amount: lockedIntent.paystackAmount, feeType: lockedIntent.feeType,
               term: lockedIntent.term, session: lockedIntent.session, billId: lockedIntent.billId,
+              allocations: lockedIntent.allocations,
               status: 'paid', paymentMethod: 'paystack', reference: lockedIntent.reference,
               receiptNumber, paidAt: new Date(), paystackData: req.body.data
             }], { session: dbSession });
 
-            const updatedPayment = paystackPayments[0];
+            updatedPayment = paystackPayments[0];
             await allocatePaymentToBill(updatedPayment, ledger, dbSession);
+            snapshotPaymentIds.push(updatedPayment._id);
 
             try {
               const notifSvc = require('../../../services/notificationService');
@@ -285,6 +409,11 @@ exports.webhook = async (req, res) => {
             } catch {}
           }
         });
+
+        // Finalize receipt snapshots after ledger commits
+        for (const pid of snapshotPaymentIds) {
+          await finalizeReceiptSnapshot(pid).catch(err => console.error('Snapshot failed:', err.message));
+        }
 
         await WebhookEvent.updateOne(
           { eventId: String(eventId), provider: 'paystack' },
@@ -336,6 +465,7 @@ exports.recordManualPayment = catchAsync(async (req, res, next) => {
     payment = await Payment.create([{
       studentId, amount: Number(amount), feeType, term, session,
       billId: billId || null,
+      allocations: req.body.allocations || [],
       status:           needsApproval ? 'awaiting_approval' : 'paid',
       paymentMethod:    method,
       reference, receiptNumber,
@@ -356,6 +486,7 @@ exports.recordManualPayment = catchAsync(async (req, res, next) => {
   });
 
   if (!needsApproval) {
+    await finalizeReceiptSnapshot(payment._id).catch(err => console.error('Snapshot failed:', err.message));
     try {
       const notifSvc = require('../../../services/notificationService');
       notifSvc.onPaymentConfirmed(studentId, Number(amount), feeType, term, receiptNumber).catch(() => {});
@@ -402,6 +533,8 @@ exports.approvePayment = catchAsync(async (req, res, next) => {
   if (!updatedPayment) {
      return next(new ApiError(400, 'Payment was already processed or no longer awaiting approval'));
   }
+
+  await finalizeReceiptSnapshot(updatedPayment._id).catch(err => console.error('Snapshot failed:', err.message));
 
   try {
     const notifSvc = require('../../../services/notificationService');
@@ -598,12 +731,11 @@ exports.getStudentPayments = catchAsync(async (req, res, next) => {
 // ── Get receipt ───────────────────────────────────────────────────────────────
 exports.getReceipt = catchAsync(async (req, res, next) => {
   const payment = await Payment.findById(req.params.id)
-    .populate({ path: 'studentId', populate: { path: 'userId', select: 'name email' } })
-    .populate('recordedBy', 'name')
-    .populate('approvedBy', 'name');
+    .populate({ path: 'studentId', populate: { path: 'userId', select: 'name email' } });
 
   if (!payment) return next(new ApiError(404, 'Payment not found'));
   if (payment.status !== 'paid') return next(new ApiError(400, 'Receipt only for completed payments'));
+  if (!payment.receiptSnapshot) return next(new ApiError(404, 'Receipt snapshot not available for this payment'));
 
   if (req.user.role === 'parent') {
     if (String(payment.studentId?.parentId) !== String(req.user._id))
@@ -616,23 +748,7 @@ exports.getReceipt = catchAsync(async (req, res, next) => {
 
   res.json({
     success: true,
-    receipt: {
-      receiptNumber:   payment.receiptNumber,
-      studentName:     payment.studentId?.userId?.name || 'N/A',
-      admissionNumber: payment.studentId?.admissionNumber,
-      amount:          payment.amount,
-      feeType:         payment.feeType,
-      term:            payment.term,
-      session:         payment.session,
-      paymentMethod:   payment.paymentMethod,
-      reference:       payment.reference,
-      transactionRef:  payment.transactionRef,
-      bankName:        payment.bankName,
-      paidAt:          payment.paidAt,
-      recordedBy:      payment.recordedBy?.name || 'System',
-      approvedBy:      payment.approvedBy?.name || null,
-      notes:           payment.notes,
-    },
+    receipt: payment.receiptSnapshot,
   });
 });
 
@@ -695,7 +811,7 @@ exports.walletCheckout = catchAsync(async (req, res, next) => {
     const receiptNumber = await generateReceiptNumber();
     const created = await Payment.create([{
       studentId: student._id, amount: Number(amount), feeType: feeType || 'all',
-      term: bill.term, session: bill.session, billId: bill._id,
+      term: bill.term, session: bill.session, billId: bill._id, allocations: req.body.allocations || [],
       status: 'paid', paymentMethod: 'wallet', reference: 'WALLET-' + Date.now(),
       recordedBy: req.user._id, receiptNumber, paidAt: new Date()
     }], { session: dbSession });
@@ -705,6 +821,8 @@ exports.walletCheckout = catchAsync(async (req, res, next) => {
     // 3. Allocate to bill
     await allocatePaymentToBill(payment, ledger, dbSession);
   });
+
+  await finalizeReceiptSnapshot(payment._id).catch(err => console.error('Snapshot failed:', err.message));
 
   if (payment) {
     try {

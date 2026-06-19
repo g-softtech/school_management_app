@@ -16,6 +16,10 @@ function ok(res, data, code)  { return res.status(code||200).json(Object.assign(
 function bad(res, code, msg)  { return res.status(code).json({ success: false, message: msg }); }
 
 exports.generateBills = async function(req, res) {
+  var generationLockKey = null;
+  const { getRedisClient } = require('../../config/redis');
+  const redis = getRedisClient();
+
   try {
     var classId = req.body.classId;
     var session = req.body.session;
@@ -27,6 +31,25 @@ exports.generateBills = async function(req, res) {
     var Student      = getStudent();
     var FeeStructure = getFeeStructure();
     var StudentBill  = getStudentBill();
+
+    // SOFT GUARD: Check for existing bills and lock generation concurrently
+    if (redis) {
+      generationLockKey = `bill:generate:${classId}:${session}:${term}`;
+      const locked = await redis.set(generationLockKey, "1", "NX", "EX", 600);
+      if (!locked && !req.body.forceRegenerate) {
+        return bad(res, 409, 'Bill generation already in progress for this class and term.');
+      }
+    }
+
+    var existingBillsCount = await StudentBill.countDocuments({
+      classId: classId,
+      session: session,
+      term: term
+    });
+
+    if (existingBillsCount > 0 && !req.body.forceRegenerate) {
+      return bad(res, 400, 'Bills already generated for this term. Use forceRegenerate to bypass.');
+    }
 
     var cls = await Class.findById(classId);
     if (!cls) return bad(res, 404, 'Class not found');
@@ -48,31 +71,159 @@ exports.generateBills = async function(req, res) {
       return bad(res, 400, 'No fee structures found for ' + term + ' term ' + session + '. Create fee structures first.');
 
     var created = 0, updated = 0, skipped = 0, results = [];
+    var generatedBillIds = [];
 
-    for (var i = 0; i < students.length; i++) {
-      var student = students[i];
-      var items = fees.map(function(fee) {
-        return { feeStructureId: fee._id, feeName: fee.name, feeType: fee.feeType,
-                 amount: fee.amount, discount: 0, netAmount: fee.amount,
-                 paid: 0, balance: fee.amount, status: 'unpaid' };
-      });
-
-      var bill = await StudentBill.findOne({ studentId: student._id, session: session, term: term });
-      if (bill) {
-        var existing = bill.items.map(function(x) { return String(x.feeStructureId); });
-        var newItems = items.filter(function(x) { return !existing.includes(String(x.feeStructureId)); });
-        if (newItems.length) { newItems.forEach(function(ni) { bill.items.push(ni); }); await bill.save(); updated++; }
-        else skipped++;
-      } else {
-        bill = new StudentBill({ studentId: student._id, classId: classId, session: session, term: term, items: items, createdBy: req.user._id });
-        await bill.save();
-        created++;
+    // Determine previous session and term for carry-over calculation
+    var prevTerm;
+    var prevSession = session;
+    if (term === 'second') prevTerm = 'first';
+    else if (term === 'third') prevTerm = 'second';
+    else if (term === 'first') {
+      prevTerm = 'third';
+      var parts = session.split('/');
+      if (parts.length === 2) {
+        var start = parseInt(parts[0], 10) - 1;
+        var end = parseInt(parts[1], 10) - 1;
+        prevSession = start + '/' + end;
       }
-      
-      const { enqueueSyncJob } = require('../../utils/syncQueue');
-      await enqueueSyncJob(bill._id.toString());
-      
-      results.push({ student: student.admissionNumber, billId: bill._id, totalAmount: bill.totalAmount, status: bill.status });
+    }
+
+    const mongoose = require('mongoose');
+    const dbSession = await mongoose.startSession();
+
+    try {
+      await dbSession.withTransaction(async () => {
+        // PHASE 1: READ (SAFE SNAPSHOT)
+        const currentBills = await StudentBill.find({ classId: classId, session: session, term: term }).session(dbSession).lean();
+        const currentBillMap = new Map();
+        currentBills.forEach(b => currentBillMap.set(b.studentId.toString(), b));
+
+        const prevBills = await StudentBill.find({ classId: classId, session: prevSession, term: prevTerm }).session(dbSession).lean();
+        const prevBillMap = new Map();
+        prevBills.forEach(b => prevBillMap.set(b.studentId.toString(), b));
+
+        // PHASE 2: COMPUTE (PURE MEMORY)
+        const bulkOps = [];
+
+        for (let i = 0; i < students.length; i++) {
+          const student = students[i];
+          const studentIdStr = student._id.toString();
+
+          const items = fees.map(fee => ({
+            _id: new mongoose.Types.ObjectId(),
+            feeStructureId: fee._id,
+            feeName: fee.name,
+            feeType: fee.feeType,
+            amount: fee.amount,
+            discount: 0,
+            netAmount: fee.amount,
+            paid: 0,
+            balance: fee.amount,
+            status: 'unpaid'
+          }));
+
+          const existingBill = currentBillMap.get(studentIdStr);
+
+          if (existingBill) {
+            const existingStructureIds = existingBill.items.map(x => String(x.feeStructureId));
+            const newItems = items.filter(x => !existingStructureIds.includes(String(x.feeStructureId)));
+
+            if (newItems.length > 0) {
+              const updatedItems = [...existingBill.items, ...newItems];
+              const totalAmount = updatedItems.reduce((sum, item) => sum + item.netAmount, 0);
+              const totalPaid = updatedItems.reduce((sum, item) => sum + (item.paid || 0), 0);
+              const totalBalance = totalAmount - totalPaid;
+              
+              let status = 'unpaid';
+              if (totalBalance < 0) status = 'overpaid';
+              else if (totalBalance === 0) status = 'paid';
+              else if (totalPaid > 0) status = 'partial';
+
+              bulkOps.push({
+                updateOne: {
+                  filter: { _id: existingBill._id },
+                  update: {
+                    $set: {
+                      items: updatedItems,
+                      totalAmount: totalAmount,
+                      totalPaid: totalPaid,
+                      totalBalance: totalBalance,
+                      status: status
+                    }
+                  }
+                }
+              });
+              generatedBillIds.push({ billId: existingBill._id.toString(), studentId: studentIdStr });
+              results.push({ student: student.admissionNumber, billId: existingBill._id, totalAmount, status });
+              updated++;
+            } else {
+              skipped++;
+            }
+          } else {
+            const prevBill = prevBillMap.get(studentIdStr);
+            const carryOverAmount = prevBill ? prevBill.totalBalance : 0;
+            const carryOverSourceBillId = prevBill ? prevBill._id : null;
+            const carryOverAmountSnapshot = carryOverAmount;
+
+            const totalAmount = items.reduce((sum, item) => sum + item.netAmount, 0);
+            const totalPaid = 0;
+            const totalBalance = totalAmount - totalPaid;
+            let status = 'unpaid';
+            if (totalBalance < 0) status = 'overpaid';
+            else if (totalBalance === 0) status = 'paid';
+
+            const newBillId = new mongoose.Types.ObjectId();
+            const newDoc = {
+              _id: newBillId,
+              studentId: student._id,
+              classId: classId,
+              session: session,
+              term: term,
+              items: items,
+              carryOver: carryOverAmount,
+              carryOverSourceBillId: carryOverSourceBillId,
+              carryOverAmountSnapshot: carryOverAmountSnapshot,
+              totalAmount: totalAmount,
+              totalPaid: totalPaid,
+              totalBalance: totalBalance,
+              status: status,
+              revision: 0,
+              createdBy: req.user._id
+            };
+
+            bulkOps.push({
+              updateOne: {
+                filter: {
+                  studentId: student._id,
+                  classId: classId,
+                  session: session,
+                  term: term
+                },
+                update: {
+                  $setOnInsert: newDoc
+                },
+                upsert: true
+              }
+            });
+            generatedBillIds.push({ billId: newBillId.toString(), studentId: studentIdStr });
+            results.push({ student: student.admissionNumber, billId: newBillId, totalAmount, status });
+            created++;
+          }
+        }
+
+        // PHASE 3: WRITE (ATOMIC BULK)
+        if (bulkOps.length > 0) {
+          await StudentBill.bulkWrite(bulkOps, { session: dbSession });
+        }
+      });
+    } finally {
+      dbSession.endSession();
+    }
+
+    // PHASE 4: QUEUE (AFTER SUCCESS ONLY) WITH ATOMIC IDEMPOTENCY
+    const { enqueueSyncJob } = require('../../utils/syncQueue');
+    for (const record of generatedBillIds) {
+      await enqueueSyncJob(record.billId).catch(err => console.error('Failed to enqueue sync job:', err.message));
     }
 
     return ok(res, { message: 'Bills generated: ' + created + ' created, ' + updated + ' updated, ' + skipped + ' unchanged',
@@ -80,6 +231,10 @@ exports.generateBills = async function(req, res) {
   } catch (e) {
     console.error('[generateBills]', e.stack || e.message);
     return bad(res, 500, e.message || 'Failed to generate bills');
+  } finally {
+    if (redis && generationLockKey) {
+      redis.del(generationLockKey).catch(() => {});
+    }
   }
 };
 
@@ -104,7 +259,13 @@ exports.generateSingleBill = async function(req, res) {
       items.filter(function(x) { return !existing.includes(String(x.feeStructureId)); }).forEach(function(ni) { bill.items.push(ni); });
       await bill.save();
     } else {
-      bill = new StudentBill({ studentId: studentId, classId: classId, session: session, term: term, items: items, createdBy: req.user._id });
+      var prevBill = await StudentBill.findOne({ studentId: studentId }).sort({ session: -1, term: -1 });
+      var carryOverAmount = prevBill ? prevBill.totalBalance : 0;
+      
+      bill = new StudentBill({ 
+        studentId: studentId, classId: classId, session: session, term: term, 
+        items: items, carryOver: carryOverAmount, createdBy: req.user._id 
+      });
       await bill.save();
     }
     

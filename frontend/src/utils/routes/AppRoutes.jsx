@@ -64,6 +64,7 @@ import StudentAssignments from '../../pages/student/Assignments';
 import StudentMessages    from '../../pages/student/Messages';
 import StudentAnalytics   from '../../pages/student/Analytics';
 import StudentDownloads   from '../../pages/student/Downloads';
+import StudentBilling     from '../../pages/student/Billing';
 
 // Parent pages
 import ParentDashboard from '../../pages/parent/Dashboard';
@@ -156,6 +157,7 @@ export default function AppRoutes() {
           <Route path="/student/analytics"      element={<StudentAnalytics />} />
           <Route path="/student/announcements"  element={<Announcements />} />
           <Route path="/student/downloads"      element={<StudentDownloads />} />
+          <Route path="/student/billing"        element={<StudentBilling />} />
         </Route>
       </Route>
 

@@ -14,8 +14,12 @@ const paymentSchema = new mongoose.Schema({
   feeType: {
     type: String, required: [true, 'Fee type is required'],
     enum: ['tuition','exam','sports','library','development','transport',
-           'hostel','pta','uniform','feeding','ict','other'],
+           'hostel','pta','uniform','feeding','ict','multiple','other'],
   },
+  allocations: [{
+    itemId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    amount: { type: Number, required: true, min: 0 }
+  }],
   term:    { type: String, required: true, enum: ['first','second','third'] },
   session: { type: String, required: true, trim: true },
   status: {
@@ -42,6 +46,10 @@ const paymentSchema = new mongoose.Schema({
   recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   paidAt:     { type: Date, default: null },
   notes:      { type: String, default: null },
+  receiptSnapshot: {
+    type: Object,
+    default: null
+  }
 }, { timestamps: true });
 
 paymentSchema.index({ studentId: 1, term: 1, session: 1 });

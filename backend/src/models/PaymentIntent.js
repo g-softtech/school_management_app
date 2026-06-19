@@ -19,12 +19,12 @@ const paymentIntentSchema = new mongoose.Schema({
   paystackAmount: {
     type: Number, required: true,
   },
-  feeType: {
-    type: String, required: true,
-  },
-  term: {
-    type: String, required: true,
-  },
+  feeType:        { type: String, required: true },
+  allocations: [{
+    itemId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    amount: { type: Number, required: true, min: 0 }
+  }],
+  term:           { type: String, required: true },
   session: {
     type: String, required: true,
   },

@@ -33,6 +33,7 @@
     "pdfkit": "^0.18.0"
   },
   "devDependencies": {
+    "ioredis-mock": "^8.13.1",
     "nodemon": "^3.1.14"
   }
 }

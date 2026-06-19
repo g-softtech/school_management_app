@@ -52,6 +52,7 @@ const NAV_ITEMS = {
     { to: '/student/announcements',      icon: FiBell,          label: 'Announcements'  },
     { to: '/student/messages',           icon: FiMessageSquare, label: 'Messages'       },
     { to: '/student/downloads',          icon: FiDownload,      label: 'Downloads'      },
+    { to: '/student/billing',            icon: FiCreditCard,    label: 'Billing & Payments'},
   ],
   parent: [
     { to: '/parent',                     icon: FiHome,          label: 'Dashboard'      },

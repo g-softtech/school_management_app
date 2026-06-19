@@ -1,22 +1,26 @@
 const Payment = require('../models/Payment');
 
 const generateReceiptNumber = async function() {
-  var year  = new Date().getFullYear();
-  var prefix = 'RCP/' + year + '/';
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const prefix = `RCP-${year}-${month}-`;
 
-  var last = await Payment.findOne(
+  const last = await Payment.findOne(
     { receiptNumber: { $regex: '^' + prefix } },
     { receiptNumber: 1 },
     { sort: { receiptNumber: -1 } }
   );
 
-  var next = 1;
+  let next = 1;
   if (last && last.receiptNumber) {
-    var parts = last.receiptNumber.split('/');
-    next = parseInt(parts[2], 10) + 1;
+    const parts = last.receiptNumber.split('-');
+    if (parts.length === 4) {
+      next = parseInt(parts[3], 10) + 1;
+    }
   }
 
-  return prefix + String(next).padStart(5, '0');
+  return prefix + String(next).padStart(6, '0');
 };
 
 module.exports = generateReceiptNumber;

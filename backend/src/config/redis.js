@@ -7,6 +7,13 @@ let redis = null;
 function getRedisClient() {
   if (redis) return redis;
 
+  if (process.env.MOCK_REDIS === 'true') {
+    const RedisMock = require('ioredis-mock');
+    redis = new RedisMock();
+    console.log('[REDIS] Using ioredis-mock for testing');
+    return redis;
+  }
+
   redis = new Redis(REDIS_URL, {
     // lazyConnect: true ensures ioredis does NOT auto-connect on instantiation.
     // This prevents ECONNREFUSED from crashing the module at require() time

@@ -15,7 +15,8 @@ import ErrorBoundary from '../../components/common/ErrorBoundary';
 import api from '../../services/api';
 import { getStudents } from '../../services/studentService';
 import { getClasses } from '../../services/classService';
-import { formatCurrency, formatDateTime, formatDate, getErrorMessage } from '../../utils/helpers';
+import { formatCurrency, formatDate, getErrorMessage } from '../../utils/formatters';
+import { printReceipt } from '../../utils/receiptHelper';
 import { TERMS, SESSIONS } from '../../utils/constants';
 
 const FEE_TYPES = ['tuition','exam','sports','library','development','transport','hostel','pta','uniform','feeding','ict','other'];
@@ -156,57 +157,9 @@ export default function AdminPayments() {
     } catch (err) { toast.error(getErrorMessage(err)); }
   };
 
-  const printReceipt = () => {
+  const printReceiptAction = () => {
     if (!receipt) return;
-    const w = window.open('', '_blank', 'width=600,height=700');
-    w.document.write(`<!DOCTYPE html><html><head>
-      <title>Receipt ${receipt?.receiptNumber ?? 'Unknown'}</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 32px; max-width: 480px; margin: 0 auto; }
-        .header { text-align: center; border-bottom: 2px solid #C9A227; padding-bottom: 12px; margin-bottom: 16px; }
-        .logo { font-size: 22px; font-weight: 800; color: #1F2937; }
-        .receipt-no { font-size: 12px; color: #6b7280; margin-top: 4px; }
-        .badge { display: inline-block; background: #C9A227; color: white; padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-        td { padding: 8px 4px; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
-        td:first-child { color: #6b7280; }
-        td:last-child { font-weight: 600; text-align: right; }
-        .amount { font-size: 24px; font-weight: 800; color: #15803d; text-align: center; margin: 20px 0; }
-        .footer { text-align: center; font-size: 11px; color: #9ca3af; margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 12px; }
-        .no-print { text-align:center; margin-bottom: 16px; }
-        .btn { padding: 8px 24px; background: #C9A227; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
-        @media print { .no-print { display: none; } }
-      </style>
-    </head><body>
-      <div class="no-print"><button class="btn" onclick="window.print()">🖨️ Print Receipt</button></div>
-      <div class="header">
-        <div class="logo">SmartSchool</div>
-        <div class="receipt-no">Official Payment Receipt</div>
-      </div>
-      <div style="text-align:center; margin-bottom:12px">
-        <span class="badge">✓ PAYMENT CONFIRMED</span>
-      </div>
-      <div class="amount">${formatCurrency(receipt?.amount)}</div>
-      <div className="overflow-x-auto w-full max-w-full"><table>
-        <tr><td>Receipt No.</td><td>${receipt?.receiptNumber ?? '—'}</td></tr>
-        <tr><td>Student</td><td>${receipt?.studentName ?? '—'}</td></tr>
-        <tr><td>Adm. No.</td><td>${receipt?.admissionNumber ?? '—'}</td></tr>
-        <tr><td>Fee Type</td><td style="text-transform:capitalize">${receipt?.feeType ?? '—'}</td></tr>
-        <tr><td>Term</td><td style="text-transform:capitalize">${receipt?.term ? `${receipt.term} Term` : '—'}</td></tr>
-        <tr><td>Session</td><td>${receipt?.session ?? '—'}</td></tr>
-        <tr><td>Method</td><td style="text-transform:capitalize">${(receipt?.paymentMethod||'').replace('_',' ') || '—'}</td></tr>
-        ${receipt?.bankName    ? `<tr><td>Bank</td><td>${receipt.bankName}</td></tr>` : ''}
-        ${receipt?.transactionRef ? `<tr><td>Teller/Ref</td><td>${receipt.transactionRef}</td></tr>` : ''}
-        <tr><td>Date Paid</td><td>${formatDate(receipt?.paidAt)}</td></tr>
-        ${receipt?.recordedBy ? `<tr><td>Recorded By</td><td>${receipt.recordedBy}</td></tr>` : ''}
-      </table></div>
-      <div class="footer">
-        <p>Thank you for your payment. Keep this receipt for your records.</p>
-        <p>SmartSchool Management System</p>
-      </div>
-    </body></html>`);
-    w.document.close();
-    w.focus();
+    printReceipt(receipt, `Receipt ${receipt.receiptNumber}`);
   };
 
   const filtered = (payments || []).filter(p => {
@@ -351,7 +304,7 @@ export default function AdminPayments() {
                 <div className="flex items-center gap-1 justify-end">
                   {p?.status === 'paid' && (
                     <>
-                      <button onClick={() => { setReceipt(p); setTimeout(printReceipt, 100); }} title="Print Receipt" className="p-1.5 hover:bg-secondary-100 rounded-lg text-secondary-500">
+                      <button onClick={() => { openReceipt(p); }} title="Print Receipt" className="p-1.5 hover:bg-secondary-100 rounded-lg text-secondary-500">
                         <FiPrinter size={14} />
                       </button>
                       <button onClick={() => handleReverse(p)} title="Reverse Payment" className="p-1.5 hover:bg-purple-100 rounded-lg text-purple-600">
@@ -546,8 +499,8 @@ export default function AdminPayments() {
                   </div>
                 ))}
               </div>
-              <button onClick={printReceipt} className="btn-primary w-full flex items-center justify-center gap-2">
-                <FiDownload size={15} /> Print Receipt
+              <button onClick={printReceiptAction} className="btn-primary w-full flex items-center justify-center gap-2">
+                <FiPrinter /> Print Receipt
               </button>
             </div>
           )}

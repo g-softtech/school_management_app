@@ -3,13 +3,15 @@ import { toast } from 'react-toastify';
 import {
   FiCreditCard, FiCheckCircle, FiClock, FiAlertCircle,
   FiDownload, FiEye, FiArrowRight, FiFileText,
+  FiDownload, FiEye, FiArrowRight, FiFileText, FiPrinter,
 } from 'react-icons/fi';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import PageSkeleton from '../../components/common/PageSkeleton';
 import Modal from '../../components/common/Modal';
 import Table from '../../components/common/Table';
-import { formatCurrency, formatDateTime, getErrorMessage } from '../../utils/helpers';
+import { formatCurrency, formatDateTime } from '../../utils/formatters';
+import { printReceipt } from '../../utils/receiptHelper';
 import { TERMS, SESSIONS } from '../../utils/constants';
 
 const STATUS_CONFIG = {
@@ -38,7 +40,9 @@ export default function ParentPayments() {
   const [showReceipt,setShowReceipt]= useState(false);
   const [showPay,    setShowPay]    = useState(false);
   const [selectedBill, setSelectedBill] = useState(null);
-  const [payAmount,    setPayAmount]    = useState('');
+  const [selectedItems, setSelectedItems] = useState({});
+  const [itemAmounts, setItemAmounts] = useState({});
+  const [payAmount, setPayAmount] = useState('');
   const [paying,       setPaying]       = useState(false);
   const [filterSession,setFilterSession]= useState('2025/2026');
   const [filterTerm,   setFilterTerm]   = useState('');
@@ -81,35 +85,37 @@ export default function ParentPayments() {
 
   const openPayModal = (bill) => {
     setSelectedBill(bill);
-    // Initialize selectedItems with all unpaid items checked
     const items = {};
+    const amounts = {};
     let initialAmount = 0;
     bill.items?.forEach(item => {
       if (item.status !== 'paid' && item.status !== 'waived') {
         const bal = Math.max(0, item.netAmount - item.paid);
         if (bal > 0) {
           items[item._id] = true;
+          amounts[item._id] = bal;
           initialAmount += bal;
         }
       }
     });
     setSelectedItems(items);
+    setItemAmounts(amounts);
     setPayAmount(String(initialAmount));
     setUseWallet(false);
     setShowPay(true);
   };
 
-  // Re-calculate payAmount when selectedItems change
+  // Re-calculate payAmount when selectedItems or itemAmounts change
   useEffect(() => {
     if (!selectedBill) return;
     let total = 0;
     selectedBill.items?.forEach(item => {
       if (selectedItems[item._id]) {
-        total += Math.max(0, item.netAmount - item.paid);
+        total += Number(itemAmounts[item._id]) || 0;
       }
     });
     setPayAmount(String(total));
-  }, [selectedItems, selectedBill]);
+  }, [selectedItems, itemAmounts, selectedBill]);
 
   const handlePayOnline = async () => {
     const totalToPay = Number(payAmount);
@@ -123,7 +129,16 @@ export default function ParentPayments() {
         ?.filter(i => selectedItems[i._id])
         .map(i => i.feeType);
       
-      const feeType = selectedFeeTypes.length === 1 ? selectedFeeTypes[0] : 'all';
+      const feeType = selectedFeeTypes.length === 1 ? selectedFeeTypes[0] : 'multiple';
+      
+      const allocations = selectedBill.items
+        ?.filter(i => selectedItems[i._id])
+        .map(i => ({
+          itemId: i._id,
+          feeType: i.feeType,
+          amount: Number(itemAmounts[i._id]) || 0
+        }));
+
       const appliedWallet = (useWallet && walletBalance > 0) ? Math.min(walletBalance, totalToPay) : 0;
       const remainder = totalToPay - appliedWallet;
 
@@ -132,7 +147,8 @@ export default function ParentPayments() {
         await api.post('/payments/wallet-checkout', {
           billId: selectedBill._id,
           amount: appliedWallet,
-          feeType
+          feeType,
+          allocations
         });
         toast.success('Payment completed using wallet balance!');
         setShowPay(false);
@@ -148,7 +164,8 @@ export default function ParentPayments() {
         term:        selectedBill.term,
         session:     selectedBill.session,
         billId:      selectedBill._id,
-        walletAmount: appliedWallet > 0 ? appliedWallet : undefined
+        walletAmount: appliedWallet > 0 ? appliedWallet : undefined,
+        allocations
       });
 
       // Redirect to Paystack
@@ -169,41 +186,9 @@ export default function ParentPayments() {
     } catch (err) { toast.error(getErrorMessage(err)); }
   };
 
-  const printReceipt = () => {
+  const printReceiptAction = () => {
     if (!receipt) return;
-    const w = window.open('', '_blank', 'width=600,height=700');
-    w.document.write(`<!DOCTYPE html><html><head>
-      <title>Receipt ${receipt.receiptNumber}</title>
-      <style>
-        body{font-family:Arial,sans-serif;padding:32px;max-width:480px;margin:0 auto}
-        .header{text-align:center;border-bottom:2px solid #C9A227;padding-bottom:12px;margin-bottom:16px}
-        .logo{font-size:22px;font-weight:800;color:#1F2937}
-        .amount{font-size:28px;font-weight:800;color:#15803d;text-align:center;margin:20px 0}
-        table{width:100%;border-collapse:collapse;margin-top:16px}
-        td{padding:8px 4px;border-bottom:1px solid #f3f4f6;font-size:13px}
-        td:first-child{color:#6b7280}td:last-child{font-weight:600;text-align:right}
-        .badge{display:inline-block;background:#C9A227;color:white;padding:3px 12px;border-radius:20px;font-size:11px}
-        .footer{text-align:center;font-size:11px;color:#9ca3af;margin-top:20px;border-top:1px solid #e5e7eb;padding-top:12px}
-        .no-print{text-align:center;margin-bottom:16px}
-        .btn{padding:8px 24px;background:#C9A227;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px}
-        @media print{.no-print{display:none}}
-      </style></head><body>
-      <div class="no-print"><button class="btn" onclick="window.print()">🖨️ Print</button></div>
-      <div class="header"><div class="logo">SmartSchool</div><div style="font-size:12px;color:#6b7280">Official Payment Receipt</div></div>
-      <div style="text-align:center;margin-bottom:12px"><span class="badge">✓ PAYMENT CONFIRMED</span></div>
-      <div class="amount">₦${Number(receipt.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}</div>
-      <div className="overflow-x-auto w-full max-w-full"><table>
-        <tr><td>Receipt No.</td><td>${receipt.receiptNumber}</td></tr>
-        <tr><td>Student</td><td>${receipt.studentName}</td></tr>
-        <tr><td>Fee Type</td><td style="text-transform:capitalize">${receipt.feeType}</td></tr>
-        <tr><td>Term</td><td style="text-transform:capitalize">${receipt.term} Term</td></tr>
-        <tr><td>Session</td><td>${receipt.session}</td></tr>
-        <tr><td>Method</td><td style="text-transform:capitalize">${(receipt.paymentMethod||'').replace('_',' ')}</td></tr>
-        <tr><td>Date</td><td>${receipt.paidAt ? new Date(receipt.paidAt).toLocaleString('en-GB') : '—'}</td></tr>
-      </table></div>
-      <div class="footer"><p>Keep this receipt for your records.</p><p>SmartSchool Management System</p></div>
-    </body></html>`);
-    w.document.close(); w.focus();
+    printReceipt(receipt, `Receipt ${receipt.receiptNumber}`);
   };
 
   if (loading) return <PageSkeleton type="dashboard" statCols={3} showCharts={false} />;
@@ -374,29 +359,68 @@ export default function ParentPayments() {
                 {selectedBill.items?.map(item => {
                   const bal = Math.max(0, item.netAmount - item.paid);
                   const isPaid = item.status === 'paid' || item.status === 'waived' || bal <= 0;
+                  const allowInst = item.feeStructureId?.allowInstallment;
+                  const minInst = Number(item.feeStructureId?.minInstallment) || 0;
                   return (
-                    <label key={item._id} className={`flex items-center justify-between p-2.5 rounded-lg border-2 cursor-pointer transition-colors ${
-                      isPaid ? 'bg-secondary-50 border-secondary-100 opacity-60 cursor-not-allowed' :
-                      selectedItems[item._id] ? 'bg-primary-50 border-primary-200' : 'bg-white border-secondary-100 hover:border-secondary-300'
+                    <div key={item._id} className={`flex flex-col p-2.5 rounded-lg border-2 transition-colors ${
+                      isPaid ? 'bg-secondary-50 border-secondary-100 opacity-60' :
+                      selectedItems[item._id] ? 'bg-primary-50 border-primary-200' : 'bg-white border-secondary-100'
                     }`}>
-                      <div className="flex items-center gap-3">
-                        <input type="checkbox"
-                          disabled={isPaid}
-                          checked={!!selectedItems[item._id]}
-                          onChange={(e) => {
-                            setSelectedItems(prev => ({ ...prev, [item._id]: e.target.checked }));
-                          }}
-                          className="w-4 h-4 text-primary-600 rounded border-secondary-300"
-                        />
-                        <div>
-                          <p className="font-semibold text-sm text-secondary-800 capitalize">{item.feeName}</p>
-                          {isPaid && <p className="text-xs text-secondary-500">{item.status}</p>}
+                      <div className="flex items-center justify-between cursor-pointer" onClick={(e) => {
+                        if (isPaid || e.target.tagName === 'INPUT') return;
+                        setSelectedItems(prev => ({ ...prev, [item._id]: !prev[item._id] }));
+                      }}>
+                        <div className="flex items-center gap-3">
+                          <input type="checkbox"
+                            disabled={isPaid}
+                            checked={!!selectedItems[item._id]}
+                            onChange={(e) => {
+                              setSelectedItems(prev => ({ ...prev, [item._id]: e.target.checked }));
+                            }}
+                            className="w-4 h-4 text-primary-600 rounded border-secondary-300"
+                          />
+                          <div>
+                            <p className="font-semibold text-sm text-secondary-800 capitalize">{item.feeName}</p>
+                            {isPaid && <p className="text-xs text-secondary-500">{item.status}</p>}
+                            {allowInst && !isPaid && <p className="text-[10px] text-primary-600 font-medium bg-primary-100 px-1.5 rounded inline-block mt-0.5">Installments Allowed</p>}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-sm text-secondary-800">{formatCurrency(bal)}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-sm text-secondary-800">{formatCurrency(bal)}</p>
-                      </div>
-                    </label>
+                      
+                      {!isPaid && selectedItems[item._id] && allowInst && (
+                        <div className="mt-2 pt-2 border-t border-primary-100 pl-7 pr-2 flex items-center justify-between">
+                          <label className="text-xs font-medium text-secondary-600">Payment Amount:</label>
+                          <div className="relative w-28">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-secondary-500 text-xs font-bold">₦</span>
+                            <input 
+                              type="number" 
+                              className="w-full pl-6 pr-2 py-1 text-sm border border-secondary-300 rounded-md focus:ring-1 focus:ring-primary-500 focus:border-primary-500 font-medium"
+                              value={itemAmounts[item._id] || ''}
+                              min={minInst}
+                              max={bal}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setItemAmounts(prev => ({ ...prev, [item._id]: val }));
+                              }}
+                              onBlur={(e) => {
+                                let val = Number(e.target.value);
+                                if (val > bal) val = bal;
+                                if (bal > minInst && val > 0 && val < minInst) val = minInst;
+                                if (val <= 0) val = minInst > 0 ? Math.min(bal, minInst) : bal;
+                                setItemAmounts(prev => ({ ...prev, [item._id]: val }));
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      
+                      {!isPaid && selectedItems[item._id] && allowInst && Number(itemAmounts[item._id]) < minInst && bal >= minInst && (
+                         <p className="text-[10px] text-red-500 mt-1 pl-7">Minimum installment is {formatCurrency(minInst)}</p>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -485,8 +509,8 @@ export default function ParentPayments() {
                 </div>
               ))}
             </div>
-            <button onClick={printReceipt} className="btn-primary w-full flex items-center justify-center gap-2">
-              <FiDownload size={15} /> Print Receipt
+            <button onClick={printReceiptAction} className="btn-primary w-full flex items-center justify-center gap-2">
+              <FiPrinter /> Print Receipt
             </button>
           </div>
         )}
