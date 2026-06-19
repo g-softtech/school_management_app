@@ -15,7 +15,7 @@ import ErrorBoundary from '../../components/common/ErrorBoundary';
 import api from '../../services/api';
 import { getStudents } from '../../services/studentService';
 import { getClasses } from '../../services/classService';
-import { formatCurrency, formatDate, getErrorMessage } from '../../utils/formatters';
+import { formatCurrency, formatDate, getErrorMessage } from "../../utils/helpers";
 import { printReceipt } from '../../utils/receiptHelper';
 import { TERMS, SESSIONS } from '../../utils/constants';
 

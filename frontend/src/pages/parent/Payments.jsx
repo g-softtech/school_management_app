@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import PageSkeleton from '../../components/common/PageSkeleton';
 import Modal from '../../components/common/Modal';
 import Table from '../../components/common/Table';
-import { formatCurrency, formatDateTime } from '../../utils/formatters';
+import { formatCurrency, formatDateTime } from '../../utils/helpers';
 import { printReceipt } from '../../utils/receiptHelper';
 import { TERMS, SESSIONS } from '../../utils/constants';
 

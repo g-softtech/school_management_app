@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { FiCreditCard, FiFileText, FiEye, FiDownload } from 'react-icons/fi';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { formatCurrency, formatDateTime } from '../../utils/formatters';
+import { formatCurrency, formatDateTime } from "../../utils/helpers";
 import { printReceipt } from '../../utils/receiptHelper';
 import PageSkeleton from '../../components/common/PageSkeleton';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
