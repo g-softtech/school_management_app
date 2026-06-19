@@ -71,6 +71,12 @@ export default function AdminBilling() {
   const [deleting,     setDeleting]     = useState(null);
   const [showConfirm,  setShowConfirm]  = useState(false);
 
+  // Adjustments
+  const [showAdjModal, setShowAdjModal] = useState(false);
+  const [adjItem,      setAdjItem]      = useState(null);
+  const [adjForm,      setAdjForm]      = useState({ type: 'discount', amount: '', reason: '' });
+  const [adjusting,    setAdjusting]    = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
