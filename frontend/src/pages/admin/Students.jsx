@@ -19,6 +19,7 @@ export default function AdminStudents() {
   const [pagination, setPagination] = useState({});
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
+  const [filterClass, setFilterClass] = useState('');
   const [page, setPage]           = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -30,16 +31,16 @@ export default function AdminStudents() {
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getStudents({ page, limit: 10, search: search || undefined });
+      const res = await getStudents({ page, limit: 10, search: search || undefined, classId: filterClass || undefined });
       setStudents(res.data.data);
       setPagination(res.data.pagination);
     } catch (err) { toast.error(getErrorMessage(err)); }
     finally { setLoading(false); }
-  }, [page, search]);
+  }, [page, search, filterClass]);
 
   useEffect(() => { fetchStudents(); }, [fetchStudents]);
   useEffect(() => { getClasses({ limit: 100 }).then((r) => setClasses(r.data.data)).catch(() => {}); }, []);
-  useEffect(() => { setPage(1); }, [search]);
+  useEffect(() => { setPage(1); }, [search, filterClass]);
 
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setShowModal(true); };
   const openEdit   = (s)  => {
@@ -104,8 +105,14 @@ export default function AdminStudents() {
         <button onClick={openCreate} className="btn-primary"><FiPlus size={16} />Add Student</button>
       </div>
 
-      <div className="card p-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search by name or admission number..." />
+      <div className="card p-4 flex flex-col sm:flex-row gap-3">
+        <div className="flex-1">
+          <SearchInput value={search} onChange={setSearch} placeholder="Search by name or admission number..." />
+        </div>
+        <select value={filterClass} onChange={e => setFilterClass(e.target.value)} className="input-field py-2 text-sm sm:w-48">
+          <option value="">All Classes</option>
+          {classes.map(c => <option key={c._id} value={c._id}>{c.name} {c.section}</option>)}
+        </select>
       </div>
 
       <Table columns={columns} data={students} loading={loading} emptyMessage="No students found" />
