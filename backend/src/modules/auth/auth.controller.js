@@ -6,6 +6,7 @@ const CLIENT_URL = process.env.CLIENT_URL || (process.env.NODE_ENV === 'producti
 
 exports.register = catchAsync(async function(req, res, next) {
   var name = req.body.name, email = req.body.email, password = req.body.password, role = req.body.role;
+  var phone = req.body.phone, qualification = req.body.qualification;
 
   if (!name || !email || !password) return next(new ApiError(400, 'Please provide name, email and password'));
   if (role === 'admin') return next(new ApiError(403, 'Admin accounts cannot be created via this endpoint'));
@@ -13,7 +14,7 @@ exports.register = catchAsync(async function(req, res, next) {
   var existing = await User.findOne({ email: email.toLowerCase() });
   if (existing) return next(new ApiError(409, 'An account with this email already exists'));
 
-  var user = await User.create({ name, email, password, role: role || 'student' });
+  var user = await User.create({ name, email, password, role: role || 'student', phone, qualification });
   var tokens = sendTokenResponse(user, 201, res);
   user.refreshToken = tokens.refreshToken;
   await user.save({ validateBeforeSave: false });

@@ -34,6 +34,14 @@ const userSchema = new mongoose.Schema(
       },
       default: 'student',
     },
+    phone: {
+      type: String,
+      trim: true,
+    },
+    qualification: {
+      type: String,
+      trim: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
