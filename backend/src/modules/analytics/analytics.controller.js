@@ -93,15 +93,20 @@ exports.getSchoolAnalytics = catchAsync(async function(req, res, next) {
     { $sort: { _id: 1 } },
   ]);
 
+  // Payment filter
+  var paymentFilter = { status: 'paid' };
+  if (term)    paymentFilter.term    = term;
+  if (session) paymentFilter.session = session;
+
   // Revenue stats
   var revenueStats = await Payment.aggregate([
-    { $match: { status: 'paid' } },
+    { $match: paymentFilter },
     { $group: { _id: null, totalRevenue: { $sum: '$amount' }, totalPayments: { $sum: 1 } } },
   ]);
   var revenue = revenueStats.length > 0 ? revenueStats[0] : { totalRevenue: 0, totalPayments: 0 };
 
   // Recent payments (last 5)
-  var recentPayments = await Payment.find({ status: 'paid' })
+  var recentPayments = await Payment.find(paymentFilter)
     .populate('studentId', 'admissionNumber')
     .sort({ paidAt: -1 })
     .limit(5);
