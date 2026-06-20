@@ -59,8 +59,9 @@ export default function AdminBilling() {
 
   // Generate modal
   const [showGenerate, setShowGenerate] = useState(false);
-  const [genForm,      setGenForm]      = useState({ classId: '', session: '2025/2026', term: 'first' });
+  const [genForm,      setGenForm]      = useState({ classId: '', session: '2025/2026', term: 'first', forceRegenerate: false });
   const [generating,   setGenerating]   = useState(false);
+  const [billsExist,   setBillsExist]   = useState(false);
 
   // Bill detail modal
   const [viewBill,   setViewBill]   = useState(null);
@@ -118,12 +119,24 @@ export default function AdminBilling() {
     e.preventDefault();
     if (!genForm.classId) { toast.error('Select a class'); return; }
     setGenerating(true);
+    setBillsExist(false);
     try {
       const res = await generateBills(genForm);
       toast.success(res.data.message);
       setShowGenerate(false);
+      setGenForm(p => ({ ...p, forceRegenerate: false }));
+      setBillsExist(false);
       load();
-    } catch (err) { toast.error(getErrorMessage(err)); }
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      // If bills already exist, surface the forceRegenerate option in the UI
+      if (msg?.toLowerCase().includes('already generated') || msg?.toLowerCase().includes('forceregenerate')) {
+        setBillsExist(true);
+        toast.error('Bills already exist for this term. Enable "Add new fees to existing bills" below and try again.');
+      } else {
+        toast.error(msg);
+      }
+    }
     finally { setGenerating(false); }
   };
 
@@ -346,15 +359,35 @@ export default function AdminBilling() {
               </select>
             </div>
           </div>
+
+          {/* forceRegenerate option — shown automatically when bills already exist */}
+          {billsExist && (
+            <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+              <input
+                type="checkbox"
+                id="forceRegenerate"
+                checked={genForm.forceRegenerate}
+                onChange={e => setGenForm(p => ({ ...p, forceRegenerate: e.target.checked }))}
+                className="mt-0.5 accent-amber-500"
+              />
+              <label htmlFor="forceRegenerate" className="text-sm text-amber-800 cursor-pointer">
+                <span className="font-semibold">Add new fees to existing bills</span>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  Bills already exist for this class and term. Checking this will <strong>only append new fee items</strong> that are not already in each student's bill. Existing items and payments are not affected.
+                </p>
+              </label>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setShowGenerate(false)} className="btn-secondary flex-1 min-w-0">Cancel</button>
+            <button type="button" onClick={() => { setShowGenerate(false); setBillsExist(false); setGenForm(p => ({ ...p, forceRegenerate: false })); }} className="btn-secondary flex-1 min-w-0">Cancel</button>
             <button type="submit" disabled={generating} className="btn-primary flex-1 min-w-0 justify-center">
               {generating ? (
                 <span className="flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                   Generating…
                 </span>
-              ) : <><FiZap size={14} /> Generate Bills</>}
+              ) : <><FiZap size={14} /> {genForm.forceRegenerate ? 'Add New Fees' : 'Generate Bills'}</>}
             </button>
           </div>
         </form>
