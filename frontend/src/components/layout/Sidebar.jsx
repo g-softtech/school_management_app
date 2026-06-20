@@ -47,6 +47,7 @@ const NAV_ITEMS = {
   ],
   student: [
     { to: '/student',                    icon: FiHome,          label: 'Dashboard'      },
+    { to: '/student/timetable',          icon: FiGrid,          label: 'Class Timetable'},
     { to: '/student/results',            icon: FiAward,         label: 'My Results'     },
     { to: '/student/lesson-notes',       icon: FiFileText,      label: 'Lesson Notes'   },
     { to: '/student/assignments',        icon: FiClipboard,     label: 'Assignments'    },
