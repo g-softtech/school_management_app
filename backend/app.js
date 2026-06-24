@@ -8,10 +8,11 @@ const path         = require('path');
 
 const CLIENT_URL = process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://smartschool-app.onrender.com' : 'http://localhost:5173');
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const errorHandler  = require('./src/middleware/errorHandler');
-const ApiError      = require('./src/utils/ApiError');
-const auditLogger   = require('./src/middleware/auditLogger');
+const errorHandler   = require('./src/middleware/errorHandler');
+const ApiError       = require('./src/utils/ApiError');
+const auditLogger    = require('./src/middleware/auditLogger');
 const { apiLimiter, authLimiter, aiLimiter } = require('./src/middleware/rateLimiter');
+const tenantContext  = require('./src/middleware/tenantContext');
 
 const app = express();
 
@@ -48,7 +49,14 @@ app.get('/api/health', function(req, res) {
 });
 
 // ── Core routes ───────────────────────────────────────────────────────────────
+// Auth routes are intentionally placed BEFORE tenantContext — login/register
+// requests originate before any tenantId is established on the client.
 app.use('/api/auth',      require('./src/modules/auth/auth.routes'));
+
+// ── Tenant Context Gate ────────────────────────────────────────────────────────
+// All routes mounted AFTER this point require a valid X-Tenant-ID header.
+// The middleware resolves the tenant from PostgreSQL and injects req.tenantId.
+app.use('/api', tenantContext);
 app.use('/api/students',  require('./src/modules/students/students.routes'));
 app.use('/api/classes',   require('./src/modules/classes/classes.routes'));
 app.use('/api/subjects',  require('./src/modules/subjects/subjects.routes'));

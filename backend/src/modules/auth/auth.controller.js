@@ -1,85 +1,263 @@
-const User = require('../../models/User');
+// Lives at: backend/src/modules/auth/auth.controller.js
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth Controller — Multi-Tenant Prisma Edition
+//
+// Key architecture changes from the MongoDB version:
+//
+//  1. All user lookups now scope by `tenantId` via @@unique([tenantId, email]).
+//  2. Because /api/auth/* routes are registered BEFORE the tenantContext gate
+//     in app.js (users must log in to know their tenant), we resolve the tenant
+//     inline using a shared helper `resolveTenant(req)`.
+//  3. JWT payload now embeds `tenantId` so the authMiddleware can forward it
+//     onto req.tenantId for every subsequent authenticated request.
+//  4. Passwords are hashed with bcryptjs (no longer delegated to Mongoose hooks).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const bcrypt   = require('bcryptjs');
+const crypto   = require('crypto');
+const prisma   = require('../../config/prisma');
 const ApiError = require('../../utils/ApiError');
 const catchAsync = require('../../utils/catchAsync');
-const { sendTokenResponse, verifyRefreshToken, generateAccessToken } = require('../../utils/generateToken');
-const CLIENT_URL = process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://smartschool-app.onrender.com' : 'http://localhost:5173');
+const {
+  sendTokenResponse,
+  verifyRefreshToken,
+  generateAccessToken,
+} = require('../../utils/generateToken');
 
-exports.register = catchAsync(async function(req, res, next) {
-  var name = req.body.name, email = req.body.email, password = req.body.password, role = req.body.role;
-  var phone = req.body.phone, qualification = req.body.qualification;
+const CLIENT_URL = process.env.CLIENT_URL ||
+  (process.env.NODE_ENV === 'production'
+    ? 'https://smartschool-app.onrender.com'
+    : 'http://localhost:5173');
 
-  if (!name || !email || !password) return next(new ApiError(400, 'Please provide name, email and password'));
-  if (role === 'admin') return next(new ApiError(403, 'Admin accounts cannot be created via this endpoint'));
+// ─── Shared helper: resolve tenant from request ───────────────────────────────
+// Auth routes sit BEFORE the tenantContext gate, so we resolve inline.
+// Priority: req.tenantId (already resolved by gate) → X-Tenant-ID header → subdomain.
+async function resolveTenant(req) {
+  // 1. Already resolved upstream (non-auth protected routes that pass the gate)
+  if (req.tenantId) {
+    return { id: req.tenantId };
+  }
 
-  var existing = await User.findOne({ email: email.toLowerCase() });
-  if (existing) return next(new ApiError(409, 'An account with this email already exists'));
+  // 2. Resolve from header or subdomain (for public auth routes)
+  const headerId = req.headers['x-tenant-id'];
+  let subdomain  = null;
+  const host     = req.hostname || (req.headers.host || '').split(':')[0];
+  const parts    = host.split('.');
+  if (parts.length >= 3 && parts[0] !== 'www') subdomain = parts[0];
 
-  var user = await User.create({ name, email, password, role: role || 'student', phone, qualification });
-  var tokens = sendTokenResponse(user, 201, res);
-  user.refreshToken = tokens.refreshToken;
-  await user.save({ validateBeforeSave: false });
+  const identifier = headerId || subdomain;
+  if (!identifier) return null;
+
+  return prisma.tenant.findFirst({
+    where: {
+      OR: [{ id: identifier }, { domain: identifier }],
+    },
+    select: { id: true, name: true },
+  });
+}
+
+// ─── REGISTER ────────────────────────────────────────────────────────────────
+exports.register = catchAsync(async (req, res, next) => {
+  const { name, email, password, role, phone, qualification } = req.body;
+
+  if (!name || !email || !password) {
+    return next(new ApiError(400, 'Please provide name, email and password'));
+  }
+  if (role === 'admin') {
+    return next(new ApiError(403, 'Admin accounts cannot be created via this endpoint'));
+  }
+
+  // Resolve tenant from request
+  const tenant = await resolveTenant(req);
+  if (!tenant) {
+    return next(new ApiError(400, 'Missing tenant context. Ensure the X-Tenant-ID header is present.'));
+  }
+
+  // Duplicate check — scoped to this tenant only
+  const existing = await prisma.user.findUnique({
+    where: { tenantId_email: { tenantId: tenant.id, email: email.toLowerCase() } },
+    select: { id: true },
+  });
+  if (existing) {
+    return next(new ApiError(409, 'An account with this email already exists in this school'));
+  }
+
+  // Hash password (Mongoose pre-save hook no longer applies)
+  const hashedPassword = await bcrypt.hash(password, 12);
+
+  const user = await prisma.user.create({
+    data: {
+      tenantId:      tenant.id,
+      name,
+      email:         email.toLowerCase(),
+      password:      hashedPassword,
+      role:          role || 'student',
+      phone:         phone         || null,
+      qualification: qualification || null,
+    },
+    select: {
+      id: true, name: true, email: true,
+      role: true, tenantId: true, isActive: true,
+    },
+  });
+
+  const tokens = sendTokenResponse(user, 201, res);
+
+  // Persist refresh token
+  await prisma.user.update({
+    where: { id: user.id },
+    data:  { refreshToken: tokens.refreshToken },
+  });
 });
 
-exports.login = catchAsync(async function(req, res, next) {
-  var email = req.body.email, password = req.body.password;
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+exports.login = catchAsync(async (req, res, next) => {
+  const { email, password } = req.body;
 
-  if (!email || !password) return next(new ApiError(400, 'Please provide email and password'));
+  if (!email || !password) {
+    return next(new ApiError(400, 'Please provide email and password'));
+  }
 
-  var user = await User.findOne({ email: email.toLowerCase() }).select('+password');
-  if (!user || !(await user.comparePassword(password))) return next(new ApiError(401, 'Incorrect email or password'));
-  if (!user.isActive) return next(new ApiError(401, 'Your account has been deactivated. Contact the school admin.'));
+  // Resolve tenant — auth routes are pre-gate, so we resolve inline
+  const tenant = await resolveTenant(req);
+  if (!tenant) {
+    return next(new ApiError(400, 'Missing tenant context. Ensure the X-Tenant-ID header is present.'));
+  }
 
-  user.lastLogin = new Date();
-  var tokens = sendTokenResponse(user, 200, res);
-  user.refreshToken = tokens.refreshToken;
-  await user.save({ validateBeforeSave: false });
+  // Tenant-scoped user lookup — @@unique([tenantId, email])
+  const user = await prisma.user.findUnique({
+    where: {
+      tenantId_email: {
+        tenantId: tenant.id,
+        email:    email.toLowerCase(),
+      },
+    },
+    // Select password explicitly (omitted from normal selects for security)
+    select: {
+      id: true, name: true, email: true, role: true,
+      tenantId: true, isActive: true, password: true,
+    },
+  });
+
+  // Constant-time comparison: always run bcrypt even on missing user to prevent
+  // timing attacks that could enumerate valid email addresses.
+  const passwordMatch = user
+    ? await bcrypt.compare(password, user.password)
+    : await bcrypt.compare(password, '$2b$12$invalidhashpadding000000000000000000000000000000000'); // dummy
+
+  if (!user || !passwordMatch) {
+    return next(new ApiError(401, 'Incorrect email or password'));
+  }
+
+  if (!user.isActive) {
+    return next(new ApiError(401, 'Your account has been deactivated. Contact the school admin.'));
+  }
+
+  const tokens = sendTokenResponse(user, 200, res);
+
+  // Persist refresh token + last login timestamp
+  await prisma.user.update({
+    where: { id: user.id },
+    data:  { refreshToken: tokens.refreshToken, lastLogin: new Date() },
+  });
 });
 
-exports.logout = catchAsync(async function(req, res, next) {
-  await User.findByIdAndUpdate(req.user.id, { refreshToken: null });
-  res.clearCookie('refreshToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' });
+// ─── LOGOUT ──────────────────────────────────────────────────────────────────
+exports.logout = catchAsync(async (req, res) => {
+  await prisma.user.update({
+    where: { id: req.user.id },
+    data:  { refreshToken: null },
+  });
+
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure:   process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+  });
+
   res.status(200).json({ success: true, message: 'Logged out successfully' });
 });
 
-exports.refreshToken = catchAsync(async function(req, res, next) {
-  var token = req.cookies && req.cookies.refreshToken;
-  if (!token) return next(new ApiError(401, 'No refresh token provided. Please log in again.'));
+// ─── REFRESH TOKEN ────────────────────────────────────────────────────────────
+exports.refreshToken = catchAsync(async (req, res, next) => {
+  const token = req.cookies?.refreshToken;
+  if (!token) {
+    return next(new ApiError(401, 'No refresh token provided. Please log in again.'));
+  }
 
-  var decoded = verifyRefreshToken(token);
-  var user = await User.findById(decoded.id).select('+refreshToken');
-  if (!user || user.refreshToken !== token) return next(new ApiError(401, 'Invalid or expired refresh token.'));
+  const decoded = verifyRefreshToken(token);
+
+  // Fetch user by id + refreshToken — avoids a second DB round-trip for tenant lookup
+  const user = await prisma.user.findFirst({
+    where: { id: decoded.id, refreshToken: token },
+    select: { id: true, name: true, email: true, role: true, tenantId: true, isActive: true },
+  });
+
+  if (!user) {
+    return next(new ApiError(401, 'Invalid or expired refresh token.'));
+  }
 
   res.status(200).json({ success: true, accessToken: generateAccessToken(user) });
 });
 
-exports.getMe = catchAsync(async function(req, res, next) {
+// ─── GET ME ───────────────────────────────────────────────────────────────────
+exports.getMe = catchAsync(async (req, res) => {
   res.status(200).json({ success: true, user: req.user });
 });
 
-exports.updatePassword = catchAsync(async function(req, res, next) {
-  var currentPassword = req.body.currentPassword, newPassword = req.body.newPassword;
+// ─── UPDATE PASSWORD ──────────────────────────────────────────────────────────
+exports.updatePassword = catchAsync(async (req, res, next) => {
+  const { currentPassword, newPassword } = req.body;
 
-  if (!currentPassword || !newPassword) return next(new ApiError(400, 'Please provide currentPassword and newPassword'));
-  if (newPassword.length < 8) return next(new ApiError(400, 'New password must be at least 8 characters'));
+  if (!currentPassword || !newPassword) {
+    return next(new ApiError(400, 'Please provide currentPassword and newPassword'));
+  }
+  if (newPassword.length < 8) {
+    return next(new ApiError(400, 'New password must be at least 8 characters'));
+  }
 
-  var user = await User.findById(req.user.id).select('+password');
-  if (!(await user.comparePassword(currentPassword))) return next(new ApiError(401, 'Current password is incorrect'));
+  // Fetch with password field
+  const user = await prisma.user.findUnique({
+    where:  { id: req.user.id },
+    select: { id: true, password: true, name: true, email: true, role: true, tenantId: true, isActive: true },
+  });
 
-  user.password = newPassword;
-  await user.save();
-  var tokens = sendTokenResponse(user, 200, res);
-  user.refreshToken = tokens.refreshToken;
-  await user.save({ validateBeforeSave: false });
+  const match = await bcrypt.compare(currentPassword, user.password);
+  if (!match) {
+    return next(new ApiError(401, 'Current password is incorrect'));
+  }
+
+  const hashedNew = await bcrypt.hash(newPassword, 12);
+  await prisma.user.update({
+    where: { id: user.id },
+    data:  { password: hashedNew, refreshToken: null }, // invalidate existing sessions
+  });
+
+  const tokens = sendTokenResponse(user, 200, res);
+  await prisma.user.update({
+    where: { id: user.id },
+    data:  { refreshToken: tokens.refreshToken },
+  });
 });
 
-const crypto = require('crypto');
-
-exports.forgotPassword = catchAsync(async function(req, res, next) {
-  var email = req.body.email;
+// ─── FORGOT PASSWORD ──────────────────────────────────────────────────────────
+exports.forgotPassword = catchAsync(async (req, res, next) => {
+  const { email } = req.body;
   if (!email) return next(new ApiError(400, 'Please provide your email address'));
 
-  var user = await User.findOne({ email: email.toLowerCase() });
-  // Always respond success to prevent email enumeration
+  const tenant = await resolveTenant(req);
+  if (!tenant) {
+    return next(new ApiError(400, 'Missing tenant context. Ensure the X-Tenant-ID header is present.'));
+  }
+
+  // Tenant-scoped lookup — prevents cross-school token generation
+  const user = await prisma.user.findUnique({
+    where: { tenantId_email: { tenantId: tenant.id, email: email.toLowerCase() } },
+    select: { id: true },
+  });
+
+  // Always respond success to prevent email enumeration attacks
   if (!user) {
     return res.status(200).json({
       success: true,
@@ -87,18 +265,19 @@ exports.forgotPassword = catchAsync(async function(req, res, next) {
     });
   }
 
-  // Generate reset token
-  var resetToken = crypto.randomBytes(32).toString('hex');
-  user.passwordResetToken   = crypto.createHash('sha256').update(resetToken).digest('hex');
-  user.passwordResetExpires = Date.now() + 30 * 60 * 1000; // 30 minutes
-  await user.save({ validateBeforeSave: false });
+  const resetToken  = crypto.randomBytes(32).toString('hex');
+  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+  const expiresAt   = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
 
-  // In production: send email. For now we return the token in dev mode.
-  var resetUrl = CLIENT_URL + '/reset-password/' + resetToken;
+  await prisma.user.update({
+    where: { id: user.id },
+    data:  { passwordResetToken: hashedToken, passwordResetExpires: expiresAt },
+  });
+
+  const resetUrl = `${CLIENT_URL}/reset-password/${resetToken}`;
 
   if (process.env.NODE_ENV === 'production') {
-    // TODO: integrate nodemailer or Sendgrid here
-    // For now just confirm it was generated
+    // TODO: fire nodemailer/Sendgrid here
     console.log('[ForgotPassword] Reset URL for', email, ':', resetUrl);
     return res.status(200).json({
       success: true,
@@ -106,43 +285,53 @@ exports.forgotPassword = catchAsync(async function(req, res, next) {
     });
   }
 
-  // Development: return token directly so testing is easy
+  // Development: expose token for easy API testing
   res.status(200).json({
     success: true,
     message: 'Password reset link generated (dev mode — check response data).',
-    resetUrl,    // remove in production
-    resetToken,  // remove in production
+    resetUrl,
+    resetToken,
   });
 });
 
-exports.resetPassword = catchAsync(async function(req, res, next) {
-  var rawToken  = req.params.token;
-  var newPassword = req.body.password;
+// ─── RESET PASSWORD ───────────────────────────────────────────────────────────
+exports.resetPassword = catchAsync(async (req, res, next) => {
+  const rawToken    = req.params.token;
+  const newPassword = req.body.password;
 
   if (!newPassword || newPassword.length < 8) {
     return next(new ApiError(400, 'Password must be at least 8 characters'));
   }
 
-  // Hash the incoming token to compare with DB
-  var hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
 
-  var user = await User.findOne({
-    passwordResetToken:   hashedToken,
-    passwordResetExpires: { $gt: Date.now() },
+  // Find user whose reset token is valid and not yet expired
+  const user = await prisma.user.findFirst({
+    where: {
+      passwordResetToken:   hashedToken,
+      passwordResetExpires: { gt: new Date() }, // Prisma date filter (not Mongoose $gt)
+    },
+    select: { id: true, name: true, email: true, role: true, tenantId: true, isActive: true },
   });
 
   if (!user) {
     return next(new ApiError(400, 'Reset link is invalid or has expired. Please request a new one.'));
   }
 
-  // Set new password and clear reset fields
-  user.password             = newPassword;
-  user.passwordResetToken   = undefined;
-  user.passwordResetExpires = undefined;
-  await user.save();
+  const hashedNew = await bcrypt.hash(newPassword, 12);
 
-  // Log them in immediately
-  var tokens = sendTokenResponse(user, 200, res);
-  user.refreshToken = tokens.refreshToken;
-  await user.save({ validateBeforeSave: false });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      password:             hashedNew,
+      passwordResetToken:   null,
+      passwordResetExpires: null,
+    },
+  });
+
+  const tokens = sendTokenResponse(user, 200, res);
+  await prisma.user.update({
+    where: { id: user.id },
+    data:  { refreshToken: tokens.refreshToken },
+  });
 });

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { toast } from 'react-toastify';
 import api from '../services/api';
 import { getMe, refreshToken as refreshTokenApi, logoutUser as apiLogout } from '../services/authService';
+import { persistTenantId, clearTenantId } from '../utils/tenant';
 
 const AuthContext = createContext(null);
 
@@ -83,21 +84,25 @@ export function AuthProvider({ children }) {
     }, ACCESS_TOKEN_LIFE_MS - REFRESH_BEFORE_MS);
   }, [clearTimers]);
 
-  // ── Login ──────────────────────────────────────────────────────────────────
+  // ── Login ───────────────────────────────────────────────────────────────────────────
   const login = useCallback((accessToken, userData) => {
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('user', JSON.stringify(userData));
     api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+    // Persist the authoritative tenantId cuid from the server response so the
+    // Axios X-Tenant-ID interceptor can fall back to it on flat IPs / localhost.
+    if (userData.tenantId) persistTenantId(userData.tenantId);
     setUser(userData);
     scheduleRefresh();
   }, [scheduleRefresh]);
 
-  // ── Logout ─────────────────────────────────────────────────────────────────
+  // ── Logout ──────────────────────────────────────────────────────────────────────────
   const logoutUser = useCallback(async () => {
     try { await apiLogout(); } catch {}
     clearTimers();
     localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
+    clearTenantId();  // evict persisted tenant cuid so next login starts fresh
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
     toast.dismiss('session-warning');
