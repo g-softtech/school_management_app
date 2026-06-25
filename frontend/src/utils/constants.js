@@ -1,6 +1,6 @@
 export const APP_NAME    = import.meta.env.VITE_APP_NAME    || 'SmartSchool';
 export const APP_TAGLINE = import.meta.env.VITE_APP_TAGLINE || 'Empowering Education Across Africa';
-export const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://your-backend-domain.com/api' : 'http://localhost:5000/api');
+export const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
 export const SERVER_URL = API_URL.replace('/api', '');
 export const FRONTEND_URL = import.meta.env.PROD ? 'https://smartschool-app.onrender.com' : 'http://localhost:5173';
 
