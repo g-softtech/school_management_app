@@ -29,7 +29,7 @@ const PLAN_FEATURES = {
 
 const ALL_FEATURES = Array.from(new Set(Object.values(PLAN_FEATURES).flat()));
 
-exports.provisionTenant = async (req, res, next) => {
+exports.registerTenantRequest = async (req, res, next) => {
   try {
     const { schoolName, subdomain, adminName, adminEmail, adminPassword, planType = 'BASIC' } = req.body;
 
@@ -47,74 +47,58 @@ exports.provisionTenant = async (req, res, next) => {
       });
     }
 
-    // Clean and lowercase subdomain to prevent routing mismatches and inject attacks
     const cleanSubdomain = subdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
 
-    // Preemptive check to ensure the subdomain is not already taken
+    // Check if subdomain is taken in ACTIVE tenants
     const existingTenant = await prisma.tenant.findUnique({
       where: { domain: cleanSubdomain }
     });
-
     if (existingTenant) {
       return res.status(409).json({ 
         success: false, 
-        message: `The subdomain '${cleanSubdomain}' is already registered.` 
+        message: `The subdomain '${cleanSubdomain}' is already taken by an active school.` 
       });
     }
 
-    // Atomically create Tenant, Settings, and Super Admin via Transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Create the isolated Tenant container
-      const tenant = await tx.tenant.create({
-        data: {
-          name: schoolName,
-          domain: cleanSubdomain
-        }
+    // Check if there's already a pending request for this subdomain or email
+    const existingRequest = await prisma.tenantRequest.findFirst({
+      where: {
+        OR: [
+          { subdomain: cleanSubdomain },
+          { adminEmail: adminEmail.trim().toLowerCase() }
+        ],
+        status: 'pending'
+      }
+    });
+
+    if (existingRequest) {
+      return res.status(409).json({
+        success: false,
+        message: 'A pending registration already exists for this subdomain or email address.'
       });
+    }
 
-      // 2. Generate and bulk-insert SchoolSettings feature flags based on planType
-      const activeFeatures = PLAN_FEATURES[planType];
-      const settingsData = ALL_FEATURES.map(featureKey => {
-        const isEnabled = activeFeatures.includes(featureKey);
-        return {
-          tenantId: tenant.id,
-          key: featureKey,
-          value: String(isEnabled),
-          description: `Toggles access to the ${featureKey} module`
-        };
-      });
+    // Hash the password now so we don't store plain text in the staging table
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(adminPassword, salt);
 
-      await tx.schoolSetting.createMany({
-        data: settingsData
-      });
-
-      // Hash password securely
-      const salt = await bcrypt.genSalt(12);
-      const hashedPassword = await bcrypt.hash(adminPassword, salt);
-
-      // 3. Seed the primary Super Admin account directly into the new Tenant
-      const adminUser = await tx.user.create({
-        data: {
-          tenantId: tenant.id,
-          name: adminName,
-          email: adminEmail.trim().toLowerCase(),
-          password: hashedPassword,
-          role: 'SUPER_ADMIN',
-          isActive: true
-        }
-      });
-
-      return { tenant, adminUser };
+    const tenantRequest = await prisma.tenantRequest.create({
+      data: {
+        schoolName,
+        subdomain: cleanSubdomain,
+        adminName,
+        adminEmail: adminEmail.trim().toLowerCase(),
+        passwordHash: hashedPassword, // Note: We need to add passwordHash to schema!
+        planType
+      }
     });
 
     return res.status(201).json({
       success: true,
-      message: 'Tenant provisioned and isolated successfully with dynamic feature modules.',
+      message: 'Registration received successfully. Your school is pending approval from the platform administrator.',
       data: {
-        tenantId: result.tenant.id,
-        schoolName: result.tenant.name,
-        subdomain: result.tenant.domain,
-        adminEmail: result.adminUser.email
+        requestId: tenantRequest.id,
+        status: tenantRequest.status
       }
     });
 

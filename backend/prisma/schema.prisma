@@ -15,6 +15,7 @@ model Tenant {
   id        String   @id @default(cuid())
   name      String
   domain    String?  @unique
+  customDomain String? @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -47,6 +48,10 @@ model Tenant {
   SchoolEvent       SchoolEvent[]
   NotificationToken NotificationToken[]
   SupportTicket     SupportTicket[]
+  schoolWebsites    SchoolWebsite[]
+  blogPosts         BlogPost[]
+  testimonials      Testimonial[]
+  galleryItems      GalleryItem[]
 }
 
 model User {
@@ -1277,4 +1282,98 @@ model SupportTicket {
 
   @@index([tenantId, userId])
   @@index([tenantId, status])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASE 9 — Platform Control Plane & SaaS Onboarding
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PlatformUser {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TenantRequest {
+  id          String   @id @default(cuid())
+  schoolName  String
+  subdomain   String   @unique
+  adminName   String
+  adminEmail  String   @unique
+  passwordHash String
+  planType    String   @default("BASIC")
+  status      String   @default("pending") // pending | approved | rejected
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASE 9 Extension — White-Label Custom Domain Architecture
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SchoolWebsite {
+  id           String  @id @default(cuid())
+  tenantId     String
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  themeColor   String? @default("#000000")
+  logoUrl      String?
+  contactEmail String?
+  heroText     String?
+  aboutUs      String?
+  isPublished  Boolean @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model BlogPost {
+  id          String  @id @default(cuid())
+  tenantId    String
+  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title       String
+  content     String
+  slug        String
+  authorName  String?
+  isPublished Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+model Testimonial {
+  id         String  @id @default(cuid())
+  tenantId   String
+  tenant     Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  authorName String
+  text       String
+  rating     Int     @default(5)
+  avatarUrl  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model GalleryItem {
+  id       String  @id @default(cuid())
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  imageUrl String
+  caption  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
 }

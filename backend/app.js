@@ -57,6 +57,10 @@ app.use('/api/auth',      require('./src/modules/auth/auth.routes'));
 // Must sit BEFORE tenantContext so new schools can sign up globally
 app.use('/api/public', require('./src/routes/provision.routes'));
 
+// ── Platform Control Plane ──────────────────────────────────────────────────────
+// Must sit BEFORE tenantContext as it is global to the SaaS Owner
+app.use('/api/platform', require('./src/routes/platform.routes'));
+
 // ── Tenant Context Gate ────────────────────────────────────────────────────────
 // All routes mounted AFTER this point require a valid X-Tenant-ID header.
 // The middleware resolves the tenant from PostgreSQL and injects req.tenantId.

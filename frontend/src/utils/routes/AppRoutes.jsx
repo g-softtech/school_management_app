@@ -2,6 +2,12 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import RoleRoute from '../../routes/RoleRoute';
 
+// Platform Control Plane Layout & Pages
+import MarketingHome from '../../pages/platform/MarketingHome';
+import RegistrationWizard from '../../pages/platform/RegistrationWizard';
+import PlatformLogin from '../../pages/platform/PlatformLogin';
+import PlatformDashboard from '../../pages/platform/PlatformDashboard';
+
 // Public layout + pages
 import PublicLayout  from '../../components/public/PublicLayout';
 import Home          from '../../pages/public/Home';
@@ -96,6 +102,117 @@ function Public({ children }) {
 }
 
 export default function AppRoutes() {
+  const hostname = window.location.hostname;
+  const CORE_DOMAINS = [
+    'thecortexsystems.com', 
+    'www.thecortexsystems.com', 
+    'localhost',
+  ];
+  
+  // If the host is perfectly our primary site, or running locally, or on Vercel preview:
+  const isPlatformHost = CORE_DOMAINS.includes(hostname) || hostname.includes('vercel.app');
+
+  if (isPlatformHost) {
+    return (
+      <Routes>
+        {/* Public SaaS Marketing */}
+        <Route path="/" element={<MarketingHome />} />
+        <Route path="/register" element={<RegistrationWizard />} />
+        
+        {/* Platform Control Plane */}
+        <Route path="/platform/login" element={<PlatformLogin />} />
+        <Route path="/platform/dashboard" element={<PlatformDashboard />} />
+        
+        {/* For testing purposes on Vercel/localhost, we also expose the standard school routes 
+            below by rendering the tenant routes instead of blocking with a wildcard. 
+            In strict production, we would use a 404 here. */}
+        <Route path="/login"          element={<LoginRoute />} />
+        <Route path="/unauthorized"   element={<Unauthorized />} />
+        <Route path="/payment/verify" element={<PaymentVerify />} />
+        <Route path="/results/share/:token" element={<SharedResult />} />
+
+        {/* Admin portal */}
+        <Route element={<RoleRoute allowedRoles={['admin']} />}>
+          <Route element={<AdminLayout />}>
+            <Route path="/admin"                  element={<AdminDashboard />} />
+            <Route path="/admin/students"         element={<AdminStudents />} />
+            <Route path="/admin/teachers"         element={<AdminTeachers />} />
+            <Route path="/admin/classes"          element={<AdminClasses />} />
+            <Route path="/admin/subjects"         element={<AdminSubjects />} />
+            <Route path="/admin/results"          element={<AdminResults />} />
+            <Route path="/admin/payments"         element={<AdminPayments />} />
+            <Route path="/admin/messages"         element={<AdminMessages />} />
+            <Route path="/admin/analytics"        element={<AdminAnalytics />} />
+            <Route path="/admin/audit-logs"       element={<AdminAuditLogs />} />
+            <Route path="/admin/notifications"    element={<AdminNotifications />} />
+            <Route path="/admin/admissions"       element={<AdminAdmissions />} />
+            <Route path="/admin/fee-structures"   element={<AdminFeeStructures />} />
+            <Route path="/admin/billing"          element={<AdminBilling />} />
+            <Route path="/admin/sessions"         element={<AdminSessions />} />
+            <Route path="/admin/timetable"        element={<AdminTimetable />} />
+            <Route path="/admin/promote"          element={<AdminPromote />} />
+            <Route path="/admin/financial-observability" element={<AdminFinancialObservability />} />
+            <Route path="/admin/billing-operations" element={<AdminBillingOperations />} />
+            <Route path="/admin/alert-history" element={<AdminAlertHistory />} />
+            <Route path="/admin/sre-dashboard" element={<SreDashboard />} />
+            <Route path="/admin/sre-glass-box" element={<EmergencyGlassBox />} />
+            <Route path="/admin/sre-flight-recorder" element={<FlightRecorder />} />
+            <Route path="/admin/executive-reliability" element={<ExecutiveDashboard />} />
+          </Route>
+        </Route>
+
+        {/* Teacher portal */}
+        <Route element={<RoleRoute allowedRoles={['teacher']} />}>
+          <Route element={<TeacherLayout />}>
+            <Route path="/teacher"                element={<TeacherDashboard />} />
+            <Route path="/teacher/classes"        element={<TeacherMyClasses />} />
+            <Route path="/teacher/attendance"     element={<TeacherAttendance />} />
+            <Route path="/teacher/lesson-notes"   element={<TeacherLessonNotes />} />
+            <Route path="/teacher/assignments"    element={<TeacherAssignments />} />
+            <Route path="/teacher/results"        element={<TeacherResults />} />
+            <Route path="/teacher/planner"        element={<TeacherPlanner />} />
+            <Route path="/teacher/messages"       element={<TeacherMessages />} />
+            <Route path="/teacher/announcements"  element={<Announcements />} />
+            <Route path="/teacher/ai"             element={<TeacherAIGenerator />} />
+          </Route>
+        </Route>
+
+        {/* Student portal */}
+        <Route element={<RoleRoute allowedRoles={['student']} />}>
+          <Route element={<StudentLayout />}>
+            <Route path="/student"                element={<StudentDashboard />} />
+            <Route path="/student/results"        element={<StudentResults />} />
+            <Route path="/student/lesson-notes"   element={<StudentLessonNotes />} />
+            <Route path="/student/assignments"    element={<StudentAssignments />} />
+            <Route path="/student/messages"       element={<StudentMessages />} />
+            <Route path="/student/analytics"      element={<StudentAnalytics />} />
+            <Route path="/student/announcements"  element={<Announcements />} />
+            <Route path="/student/downloads"      element={<StudentDownloads />} />
+            <Route path="/student/billing"        element={<StudentBilling />} />
+            <Route path="/student/timetable"      element={<StudentTimetable />} />
+          </Route>
+        </Route>
+
+        {/* Parent portal */}
+        <Route element={<RoleRoute allowedRoles={['parent']} />}>
+          <Route element={<ParentLayout />}>
+            <Route path="/parent"                 element={<ParentDashboard />} />
+            <Route path="/parent/results"         element={<ParentResults />} />
+            <Route path="/parent/payments"        element={<ParentPayments />} />
+            <Route path="/parent/messages"        element={<ParentMessages />} />
+            <Route path="/parent/announcements"   element={<Announcements />} />
+          </Route>
+        </Route>
+
+        {/* 404 */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    );
+  }
+
+  // ─── TENANT SUBDOMAIN / CUSTOM DOMAIN ROUTING ────────────────────────────
+  // If we reach here, it means we are either on greensprings.thecortexsystems.com
+  // or a custom domain like greenspringsacademy.com
   return (
     <Routes>
 
