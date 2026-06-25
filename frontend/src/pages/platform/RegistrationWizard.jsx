@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../services/api';
 
 export default function RegistrationWizard() {
@@ -36,7 +37,7 @@ export default function RegistrationWizard() {
           <p className="text-gray-600">
             Your school infrastructure is being staged. We will notify you at <strong>{formData.adminEmail}</strong> once the platform administrator approves your environment.
           </p>
-          <a href="/" className="mt-4 block text-blue-600 hover:underline">Return to Home</a>
+          <Link to="/" className="mt-4 block text-blue-600 hover:underline">Return to Home</Link>
         </div>
       </div>
     );

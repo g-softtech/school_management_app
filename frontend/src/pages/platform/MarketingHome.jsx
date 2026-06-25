@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 export default function MarketingHome() {
   return (
@@ -7,9 +8,9 @@ export default function MarketingHome() {
         <div className="max-w-7xl mx-auto px-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold">The Cortex Systems</h1>
           <nav>
-            <a href="/register" className="px-4 py-2 bg-blue-600 rounded text-white font-medium hover:bg-blue-700">
+            <Link to="/register" className="px-4 py-2 bg-blue-600 rounded text-white font-medium hover:bg-blue-700">
               Start Your School
-            </a>
+            </Link>
           </nav>
         </div>
       </header>
@@ -22,9 +23,9 @@ export default function MarketingHome() {
           Deploy your own white-labeled school management infrastructure in seconds. Isolated databases, custom domains, and dynamic feature scaling.
         </p>
         <div className="mt-10">
-          <a href="/register" className="px-8 py-3 bg-blue-600 rounded text-white text-lg font-medium hover:bg-blue-700">
+          <Link to="/register" className="px-8 py-3 bg-blue-600 rounded text-white text-lg font-medium hover:bg-blue-700">
             Deploy Now
-          </a>
+          </Link>
         </div>
       </main>
     </div>
