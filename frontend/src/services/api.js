@@ -95,12 +95,17 @@ api.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       // Safely wipe invalid credentials to prevent infinite redirect loops
       localStorage.removeItem('token');
+      localStorage.removeItem('accessToken');
       localStorage.removeItem('user');
       
       // Only redirect if we are not already on an auth or public page
       const currentPath = window.location.pathname;
       if (!currentPath.includes('/login') && !currentPath.includes('/register')) {
-        window.location.href = '/login?expired=true';
+        if (currentPath.startsWith('/platform')) {
+          window.location.href = '/platform/login?expired=true';
+        } else {
+          window.location.href = '/login?expired=true';
+        }
       }
     }
     

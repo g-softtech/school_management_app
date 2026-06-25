@@ -51,8 +51,8 @@ export const FeatureFlagProvider = ({ children }) => {
 
     // Only fetch features if we are genuinely on a tenant subdomain (not the root landing page)
     const currentTenant = api.defaults.headers['X-Tenant-ID'] || localStorage.getItem('dev_tenant_id');
-    // Or if we know we have a token (since flags only apply inside the app dashboard)
-    const hasToken = !!localStorage.getItem('token');
+    // Or if we know we have a school user token (since flags only apply inside the app dashboard)
+    const hasToken = !!localStorage.getItem('accessToken');
     
     if (hasToken) {
       fetchFeatures();
