@@ -18,12 +18,14 @@ const app = express();
 
 // ── Security ──────────────────────────────────────────────────────────────────
 app.use(helmet());
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  CLIENT_URL,
-];
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(cors({ 
+  origin: function(origin, callback) {
+    // Allow all origins to support White-Label Custom Domains 
+    // and dynamic Vercel/Render preview environments.
+    callback(null, true);
+  }, 
+  credentials: true 
+}));
 app.set('trust proxy', 1);
 
 if (NODE_ENV === 'development') app.use(morgan('dev'));
