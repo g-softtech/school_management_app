@@ -60,7 +60,12 @@ export function extractSubdomain() {
  * @returns {string}  A subdomain slug OR a cuid `tenantId` from localStorage.
  */
 export function getCurrentTenant() {
-  // 1. Try subdomain first (production primary path)
+  // 1. Developer Console Override (Highest priority for testing on generic domains)
+  //    localStorage.setItem('__dev_tenant__', 'my-school')
+  const devOverride = localStorage.getItem('__dev_tenant__');
+  if (devOverride) return devOverride;
+
+  // 2. Try subdomain next (production primary path)
   const subdomain = extractSubdomain();
   if (subdomain) return subdomain;
 
