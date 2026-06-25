@@ -12,9 +12,9 @@
 
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET           = process.env.JWT_SECRET;
+const JWT_SECRET           = process.env.JWT_SECRET            || 'fallback_jwt_secret_for_dev';
 const JWT_EXPIRES_IN       = process.env.JWT_EXPIRES_IN        || '7d';
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET  || 'fallback_refresh_secret_for_dev';
 const REFRESH_EXPIRES_IN   = process.env.REFRESH_EXPIRES_IN    || '30d';
 
 // ─── Access token ─────────────────────────────────────────────────────────────
