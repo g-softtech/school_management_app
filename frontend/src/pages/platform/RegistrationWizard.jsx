@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import api from '../../utils/api';
+import api from '../../services/api';
 
 export default function RegistrationWizard() {
   const [formData, setFormData] = useState({
