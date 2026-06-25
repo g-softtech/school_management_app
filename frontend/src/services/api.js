@@ -1,47 +1,6 @@
 import axios from 'axios';
 
-/**
- * Parses the current browser URL to extract the sub-tenant string.
- * Hardened to prevent routing crashes on localhost, naked IP addresses,
- * and the primary corporate landing page (thecortexsystems.com).
- * 
- * @returns {string|null} The resolved tenant ID, or null if root level.
- */
-const getSubdomain = () => {
-  const hostname = window.location.hostname;
-  
-  // Guard 1: Local development environments
-  if (
-    hostname === 'localhost' || 
-    hostname === '127.0.0.1' || 
-    hostname.startsWith('192.168.')
-  ) {
-    // Allows developers to dynamically mock a school locally
-    return localStorage.getItem('dev_tenant_id') || 'greensprings';
-  }
-
-  // Guard 2: Root apex domain and generic www fallback
-  if (
-    hostname === 'thecortexsystems.com' || 
-    hostname === 'www.thecortexsystems.com' || 
-    hostname === 'www'
-  ) {
-    return null; // Public root website; no specific tenant context
-  }
-
-  // Extract subdomain securely. E.g., 'greensprings.thecortexsystems.com' -> 'greensprings'
-  const parts = hostname.split('.');
-  
-  // Ensure we actually have a subdomain (needs at least 3 parts: sub.domain.tld)
-  if (parts.length >= 3) {
-    const subdomain = parts[0];
-    if (subdomain !== 'www') {
-      return subdomain;
-    }
-  }
-  
-  return null;
-};
+import { getCurrentTenant } from '../utils/tenant';
 
 import { API_URL } from '../utils/constants';
 
@@ -69,7 +28,7 @@ api.interceptors.request.use(
 
     // 2. Multi-Tenant Subdomain Injection
     // The backend's tenantContext middleware strictly requires this header.
-    const tenantId = getSubdomain();
+    const tenantId = getCurrentTenant();
     if (tenantId) {
       if (config.headers.set) {
         config.headers.set('X-Tenant-ID', tenantId);
