@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { getInitials } from '../../utils/helpers';
 import { APP_NAME } from '../../utils/constants';
+import { FeatureGate } from '../../context/FeatureFlagContext';
 
 const NAV_ITEMS = {
   admin: [
@@ -18,50 +19,50 @@ const NAV_ITEMS = {
     { to: '/admin/teachers',       icon: FiUserCheck,     label: 'Teachers'         },
     { to: '/admin/classes',        icon: FiBook,          label: 'Classes & Subjects'},
     { to: '/admin/results',        icon: FiAward,         label: 'Results'          },
-    { to: '/admin/payments',       icon: FiCreditCard,    label: 'Payments'         },
+    { to: '/admin/payments',       icon: FiCreditCard,    label: 'Payments',        featureFlag: 'feature_finance' },
     { to: '/admin/messages',       icon: FiMessageSquare, label: 'Messages'         },
     { to: '/admin/analytics',      icon: FiBarChart2,     label: 'Analytics'        },
-    { to: '/admin/financial-observability', icon: FiActivity, label: 'Financial Health' },
+    { to: '/admin/financial-observability', icon: FiActivity, label: 'Financial Health', featureFlag: 'feature_finance' },
     { to: '/admin/admissions',     icon: FiInbox,         label: 'Admissions'       },
-    { to: '/admin/fee-structures', icon: FiPercent,       label: 'Fee Structures'   },
-    { to: '/admin/billing',        icon: FiFileText,      label: 'Billing'          },
-    { to: '/admin/billing-operations', icon: FiActivity,  label: 'Billing Operations'},
+    { to: '/admin/fee-structures', icon: FiPercent,       label: 'Fee Structures',  featureFlag: 'feature_finance' },
+    { to: '/admin/billing',        icon: FiFileText,      label: 'Billing',         featureFlag: 'feature_invoices' },
+    { to: '/admin/billing-operations', icon: FiActivity,  label: 'Billing Operations', featureFlag: 'feature_invoices' },
     { to: '/admin/alert-history',  icon: FiAlertTriangle, label: 'Alert History'    },
     { to: '/admin/sessions',       icon: FiCalendar,      label: 'Sessions & Terms' },
     { to: '/admin/timetable',      icon: FiGrid,          label: 'Timetable'        },
     { to: '/admin/promote',        icon: FiArrowRight,    label: 'Class Promotion'  },
-    { to: '/admin/notifications',  icon: FiBell,          label: 'Notifications'    },
-    { to: '/admin/audit-logs',     icon: FiList,          label: 'Audit Logs'       },
+    { to: '/admin/notifications',  icon: FiBell,          label: 'Notifications',   featureFlag: 'feature_notifications' },
+    { to: '/admin/audit-logs',     icon: FiList,          label: 'Audit Logs',      featureFlag: 'feature_audit_logs' },
   ],
   teacher: [
     { to: '/teacher',                    icon: FiHome,          label: 'Dashboard'      },
     { to: '/teacher/classes',            icon: FiBook,          label: 'My Classes'     },
-    { to: '/teacher/attendance',         icon: FiCheckSquare,   label: 'Attendance'     },
-    { to: '/teacher/lesson-notes',       icon: FiFileText,      label: 'Lesson Notes'   },
-    { to: '/teacher/assignments',        icon: FiClipboard,     label: 'Assignments'    },
+    { to: '/teacher/attendance',         icon: FiCheckSquare,   label: 'Attendance',    featureFlag: 'feature_attendance' },
+    { to: '/teacher/lesson-notes',       icon: FiFileText,      label: 'Lesson Notes',  featureFlag: 'feature_lesson_notes' },
+    { to: '/teacher/assignments',        icon: FiClipboard,     label: 'Assignments',   featureFlag: 'feature_assignments' },
     { to: '/teacher/results',            icon: FiAward,         label: 'Results'        },
     { to: '/teacher/planner',            icon: FiCalendar,      label: 'Weekly Planner' },
     { to: '/teacher/messages',           icon: FiMessageSquare, label: 'Messages'       },
-    { to: '/teacher/announcements',      icon: FiBell,          label: 'Announcements'  },
+    { to: '/teacher/announcements',      icon: FiBell,          label: 'Announcements', featureFlag: 'feature_notifications' },
     { to: '/teacher/ai',                 icon: FiCpu,           label: 'AI Generator'   },
   ],
   student: [
     { to: '/student',                    icon: FiHome,          label: 'Dashboard'      },
     { to: '/student/timetable',          icon: FiGrid,          label: 'Class Timetable'},
     { to: '/student/results',            icon: FiAward,         label: 'My Results'     },
-    { to: '/student/lesson-notes',       icon: FiFileText,      label: 'Lesson Notes'   },
-    { to: '/student/assignments',        icon: FiClipboard,     label: 'Assignments'    },
+    { to: '/student/lesson-notes',       icon: FiFileText,      label: 'Lesson Notes',  featureFlag: 'feature_lesson_notes' },
+    { to: '/student/assignments',        icon: FiClipboard,     label: 'Assignments',   featureFlag: 'feature_assignments' },
     { to: '/student/analytics',          icon: FiActivity,      label: 'My Progress'    },
-    { to: '/student/announcements',      icon: FiBell,          label: 'Announcements'  },
+    { to: '/student/announcements',      icon: FiBell,          label: 'Announcements', featureFlag: 'feature_notifications' },
     { to: '/student/messages',           icon: FiMessageSquare, label: 'Messages'       },
     { to: '/student/downloads',          icon: FiDownload,      label: 'Downloads'      },
-    { to: '/student/billing',            icon: FiCreditCard,    label: 'Billing & Payments'},
+    { to: '/student/billing',            icon: FiCreditCard,    label: 'Billing & Payments', featureFlag: 'feature_finance' },
   ],
   parent: [
     { to: '/parent',                     icon: FiHome,          label: 'Dashboard'      },
     { to: '/parent/results',             icon: FiAward,         label: "Child's Results"},
-    { to: '/parent/payments',            icon: FiCreditCard,    label: 'Fee Payments'   },
-    { to: '/parent/announcements',       icon: FiBell,          label: 'Announcements'  },
+    { to: '/parent/payments',            icon: FiCreditCard,    label: 'Fee Payments',  featureFlag: 'feature_finance' },
+    { to: '/parent/announcements',       icon: FiBell,          label: 'Announcements', featureFlag: 'feature_notifications' },
     { to: '/parent/messages',            icon: FiMessageSquare, label: 'Messages'       },
   ],
 };
@@ -112,20 +113,31 @@ export default function Sidebar({ isOpen, onClose }) {
 
         {/* Navigation */}
         <nav className="flex-1 min-w-0 overflow-y-auto py-4 px-3 space-y-0.5">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === `/${user?.role}`}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `nav-item transition-all duration-200 ${isActive ? 'nav-item-active shadow-sm' : 'nav-item-inactive hover:translate-x-0.5'}`
-              }
-            >
-              <item.icon size={17} className="flex-shrink-0" />
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+          {navItems.map((item) => {
+            const link = (
+              <NavLink
+                key={item.featureFlag ? undefined : item.to}
+                to={item.to}
+                end={item.to === `/${user?.role}`}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `nav-item transition-all duration-200 ${isActive ? 'nav-item-active shadow-sm' : 'nav-item-inactive hover:translate-x-0.5'}`
+                }
+              >
+                <item.icon size={17} className="flex-shrink-0" />
+                <span>{item.label}</span>
+              </NavLink>
+            );
+
+            if (item.featureFlag) {
+              return (
+                <FeatureGate key={item.to} flag={item.featureFlag}>
+                  {link}
+                </FeatureGate>
+              );
+            }
+            return link;
+          })}
         </nav>
 
         {/* User info + logout */}

@@ -1,23 +1,11 @@
-/**
- * studentBill.controller.js — FINAL VERSION
- * - NO catchAsync, NO next parameter anywhere
- * - Lazy-loads all models to avoid circular deps
- * - All errors returned via res.status().json()
- * - THE FIX: term: { $in: [term, 'all'] } instead of double $or
- */
-
-function getStudentBill()  { return require('../../models/StudentBill');  }
-function getFeeStructure() { return require('../../models/FeeStructure'); }
-function getStudent()      { return require('../../models/Student');      }
-function getPayment()      { return require('../../models/Payment');      }
-function getClass()        { return require('../../models/Class');        }
+const prisma = require('../../config/prisma');
+const { getRedisClient } = require('../../config/redis');
 
 function ok(res, data, code)  { return res.status(code||200).json(Object.assign({ success: true }, data)); }
 function bad(res, code, msg)  { return res.status(code).json({ success: false, message: msg }); }
 
 exports.generateBills = async function(req, res) {
   var generationLockKey = null;
-  const { getRedisClient } = require('../../config/redis');
   const redis = getRedisClient();
 
   try {
@@ -27,14 +15,8 @@ exports.generateBills = async function(req, res) {
     if (!classId || !session || !term)
       return bad(res, 400, 'classId, session and term are required');
 
-    var Class        = getClass();
-    var Student      = getStudent();
-    var FeeStructure = getFeeStructure();
-    var StudentBill  = getStudentBill();
-
-    // SOFT GUARD: Check for existing bills and lock generation concurrently
     if (redis) {
-      generationLockKey = `bill:generate:${classId}:${session}:${term}`;
+      generationLockKey = `bill:generate:${req.tenantId}:${classId}:${session}:${term}`;
       try {
         const locked = await redis.set(generationLockKey, "1", "NX", "EX", 600);
         if (!locked && !req.body.forceRegenerate) {
@@ -45,30 +27,31 @@ exports.generateBills = async function(req, res) {
       }
     }
 
-    var existingBillsCount = await StudentBill.countDocuments({
-      classId: classId,
-      session: session,
-      term: term
+    var existingBillsCount = await prisma.invoice.count({
+      where: { tenantId: req.tenantId, classId, session, term }
     });
 
     if (existingBillsCount > 0 && !req.body.forceRegenerate) {
       return bad(res, 400, 'Bills already generated for this term. Use forceRegenerate to bypass.');
     }
 
-    var cls = await Class.findById(classId);
+    var cls = await prisma.class.findFirst({ where: { id: classId, tenantId: req.tenantId } });
     if (!cls) return bad(res, 404, 'Class not found');
 
-    var students = await Student.find({ classId: classId, isActive: true });
+    var students = await prisma.student.findMany({ where: { classId, isActive: true, tenantId: req.tenantId } });
     if (!students.length) return bad(res, 400, 'No active students in this class');
 
-    var fees = await FeeStructure.find({
-      session:  session,
-      isActive: true,
-      term:     { $in: [term, 'all'] },
-      $or: [
-        { scope: 'all_classes' },
-        { scope: 'specific_class', classId: classId },
-      ],
+    var fees = await prisma.feeStructure.findMany({
+      where: {
+        tenantId: req.tenantId,
+        session: session,
+        isActive: true,
+        term: { in: [term, 'all'] },
+        OR: [
+          { scope: 'all_classes' },
+          { scope: 'specific_class', classId: classId },
+        ]
+      }
     });
 
     if (!fees.length)
@@ -77,7 +60,6 @@ exports.generateBills = async function(req, res) {
     var created = 0, updated = 0, skipped = 0, results = [];
     var generatedBillIds = [];
 
-    // Determine previous session and term for carry-over calculation
     var prevTerm;
     var prevSession = session;
     if (term === 'second') prevTerm = 'first';
@@ -92,157 +74,119 @@ exports.generateBills = async function(req, res) {
       }
     }
 
-    const mongoose = require('mongoose');
-    const dbSession = await mongoose.startSession();
+    await prisma.$transaction(async (tx) => {
+      const currentBills = await tx.invoice.findMany({ where: { tenantId: req.tenantId, classId, session, term }, include: { items: true } });
+      const currentBillMap = new Map();
+      currentBills.forEach(b => currentBillMap.set(b.studentId, b));
 
-    try {
-      await dbSession.withTransaction(async () => {
-        // PHASE 1: READ (SAFE SNAPSHOT)
-        const currentBills = await StudentBill.find({ classId: classId, session: session, term: term }).session(dbSession).lean();
-        const currentBillMap = new Map();
-        currentBills.forEach(b => currentBillMap.set(b.studentId.toString(), b));
+      const prevBills = await tx.invoice.findMany({ where: { tenantId: req.tenantId, classId, session: prevSession, term: prevTerm }, include: { items: true } });
+      const prevBillMap = new Map();
+      prevBills.forEach(b => prevBillMap.set(b.studentId, b));
 
-        const prevBills = await StudentBill.find({ classId: classId, session: prevSession, term: prevTerm }).session(dbSession).lean();
-        const prevBillMap = new Map();
-        prevBills.forEach(b => prevBillMap.set(b.studentId.toString(), b));
+      for (let i = 0; i < students.length; i++) {
+        const student = students[i];
+        const studentIdStr = student.id;
 
-        // PHASE 2: COMPUTE (PURE MEMORY)
-        const bulkOps = [];
+        const baseItems = fees.map(fee => ({
+          tenantId: req.tenantId,
+          feeStructureId: fee.id,
+          feeName: fee.name,
+          feeType: fee.feeType,
+          amount: fee.amount,
+          discount: 0,
+          netAmount: fee.amount,
+          paid: 0,
+          balance: fee.amount,
+          status: 'unpaid'
+        }));
 
-        for (let i = 0; i < students.length; i++) {
-          const student = students[i];
-          const studentIdStr = student._id.toString();
+        const existingBill = currentBillMap.get(studentIdStr);
 
-          const items = fees.map(fee => ({
-            _id: new mongoose.Types.ObjectId(),
-            feeStructureId: fee._id,
-            feeName: fee.name,
-            feeType: fee.feeType,
-            amount: fee.amount,
-            discount: 0,
-            netAmount: fee.amount,
-            paid: 0,
-            balance: fee.amount,
-            status: 'unpaid'
-          }));
+        if (existingBill) {
+          const existingStructureIds = existingBill.items.map(x => x.feeStructureId);
+          const newItems = baseItems.filter(x => !existingStructureIds.includes(x.feeStructureId));
 
-          const existingBill = currentBillMap.get(studentIdStr);
+          if (newItems.length > 0) {
+            await tx.invoiceLineItem.createMany({
+              data: newItems.map(item => ({ ...item, invoiceId: existingBill.id }))
+            });
 
-          if (existingBill) {
-            const existingStructureIds = existingBill.items.map(x => String(x.feeStructureId));
-            const newItems = items.filter(x => !existingStructureIds.includes(String(x.feeStructureId)));
-
-            if (newItems.length > 0) {
-              const updatedItems = [...existingBill.items, ...newItems];
-              const totalAmount = updatedItems.reduce((sum, item) => sum + item.netAmount, 0);
-              const totalPaid = updatedItems.reduce((sum, item) => sum + (item.paid || 0), 0);
-              const totalBalance = totalAmount - totalPaid;
-              
-              let status = 'unpaid';
-              if (totalBalance < 0) status = 'overpaid';
-              else if (totalBalance === 0) status = 'paid';
-              else if (totalPaid > 0) status = 'partial';
-
-              const nextRevision = (existingBill.revision || 0) + 1;
-              bulkOps.push({
-                updateOne: {
-                  filter: { _id: existingBill._id },
-                  update: {
-                    $set: {
-                      items: updatedItems,
-                      totalAmount: totalAmount,
-                      totalPaid: totalPaid,
-                      totalBalance: totalBalance,
-                      status: status,
-                      revision: nextRevision
-                    }
-                  }
-                }
-              });
-              generatedBillIds.push({ billId: existingBill._id.toString(), studentId: studentIdStr, revision: nextRevision });
-              results.push({ student: student.admissionNumber, billId: existingBill._id, totalAmount, status });
-              updated++;
-            } else {
-              skipped++;
-            }
-          } else {
-            const prevBill = prevBillMap.get(studentIdStr);
-            const carryOverAmount = prevBill ? prevBill.totalBalance : 0;
-            const carryOverSourceBillId = prevBill ? prevBill._id : null;
-            const carryOverAmountSnapshot = carryOverAmount;
-
-            const totalAmount = items.reduce((sum, item) => sum + item.netAmount, 0);
-            const totalPaid = 0;
+            const updatedItems = [...existingBill.items, ...newItems];
+            const totalAmount = updatedItems.reduce((sum, item) => sum + item.netAmount, 0);
+            const totalPaid = updatedItems.reduce((sum, item) => sum + (item.paid || 0), 0);
             const totalBalance = totalAmount - totalPaid;
+            
             let status = 'unpaid';
             if (totalBalance < 0) status = 'overpaid';
             else if (totalBalance === 0) status = 'paid';
+            else if (totalPaid > 0) status = 'partial';
 
-            const newBillId = new mongoose.Types.ObjectId();
-            const newDoc = {
-              _id: newBillId,
-              studentId: student._id,
+            const nextRevision = (existingBill.revision || 0) + 1;
+            
+            await tx.invoice.update({
+              where: { id: existingBill.id },
+              data: {
+                totalAmount, totalPaid, totalBalance, status, revision: nextRevision
+              }
+            });
+
+            generatedBillIds.push({ billId: existingBill.id, studentId: studentIdStr, revision: nextRevision });
+            results.push({ student: student.admissionNumber, billId: existingBill.id, totalAmount, status });
+            updated++;
+          } else {
+            skipped++;
+          }
+        } else {
+          const prevBill = prevBillMap.get(studentIdStr);
+          const carryOverAmount = prevBill ? prevBill.totalBalance : 0;
+
+          const totalAmount = baseItems.reduce((sum, item) => sum + item.netAmount, 0);
+          const totalPaid = 0;
+          const totalBalance = totalAmount - totalPaid;
+          let status = 'unpaid';
+          if (totalBalance < 0) status = 'overpaid';
+          else if (totalBalance === 0) status = 'paid';
+
+          const newBill = await tx.invoice.create({
+            data: {
+              tenantId: req.tenantId,
+              studentId: student.id,
               classId: classId,
               session: session,
               term: term,
-              items: items,
               carryOver: carryOverAmount,
-              carryOverSourceBillId: carryOverSourceBillId,
-              carryOverAmountSnapshot: carryOverAmountSnapshot,
               totalAmount: totalAmount,
               totalPaid: totalPaid,
               totalBalance: totalBalance,
               status: status,
               revision: 0,
-              createdBy: req.user._id
-            };
+              items: { create: baseItems }
+            }
+          });
 
-            bulkOps.push({
-              updateOne: {
-                filter: {
-                  studentId: student._id,
-                  classId: classId,
-                  session: session,
-                  term: term
-                },
-                update: {
-                  $setOnInsert: newDoc
-                },
-                upsert: true
-              }
-            });
-            generatedBillIds.push({ billId: newBillId.toString(), studentId: studentIdStr, revision: 0 });
-            results.push({ student: student.admissionNumber, billId: newBillId, totalAmount, status });
-            created++;
-          }
+          generatedBillIds.push({ billId: newBill.id, studentId: studentIdStr, revision: 0 });
+          results.push({ student: student.admissionNumber, billId: newBill.id, totalAmount, status });
+          created++;
         }
+      }
 
-        // PHASE 3: WRITE (ATOMIC BULK)
-        if (bulkOps.length > 0) {
-          await StudentBill.bulkWrite(bulkOps, { session: dbSession });
-          
-          // PHASE 3.5: CREATE OUTBOX EVENTS ATOMICALLY
-          const OutboxEvent = require('../../models/OutboxEvent');
-          const outboxDocs = generatedBillIds.map(g => ({
-            type: 'REBUILD_BILL',
-            billId: g.billId,
-            eventKey: `REBUILD_BILL:${g.billId}:${g.revision}`,
-            status: 'pending',
-            nextRetryAt: new Date()
-          }));
-          try {
-            await OutboxEvent.insertMany(outboxDocs, { session: dbSession, ordered: false });
-          } catch (e) {
-            // Ignore duplicate key errors for identical event keys
-            if (e.code !== 11000) throw e;
-          }
-        }
-      });
-    } finally {
-      dbSession.endSession();
-    }
+      if (generatedBillIds.length > 0) {
+        const outboxDocs = generatedBillIds.map(g => ({
+          tenantId: req.tenantId,
+          type: 'REBUILD_BILL',
+          billId: g.billId,
+          eventKey: `REBUILD_BILL:${g.billId}:${g.revision}`,
+          status: 'pending',
+        }));
+        
+        // Prisma createMany ignores duplicates with skipDuplicates
+        await tx.outboxEvent.createMany({
+          data: outboxDocs,
+          skipDuplicates: true
+        });
+      }
+    });
 
-    // PHASE 4: QUEUE (AFTER SUCCESS ONLY) WITH ATOMIC IDEMPOTENCY
     const { enqueueSyncJob } = require('../../utils/syncQueue');
     for (const record of generatedBillIds) {
       await enqueueSyncJob(record.billId).catch(err => console.error('Failed to enqueue sync job:', err.message));
@@ -262,217 +206,260 @@ exports.generateBills = async function(req, res) {
 
 exports.generateSingleBill = async function(req, res) {
   try {
-    var StudentBill = getStudentBill(); var FeeStructure = getFeeStructure(); var Student = getStudent();
     var studentId = req.body.studentId, session = req.body.session, term = req.body.term;
     if (!studentId || !session || !term) return bad(res, 400, 'studentId, session and term required');
-    var student = await Student.findById(studentId).populate('classId');
+    
+    var student = await prisma.student.findFirst({ where: { id: studentId, tenantId: req.tenantId }, include: { class: true } });
     if (!student) return bad(res, 404, 'Student not found');
     if (!student.classId) return bad(res, 400, 'Student has no class');
-    var classId = student.classId._id;
-    var fees = await FeeStructure.find({ session: session, isActive: true, term: { $in: [term,'all'] },
-      $or: [{ scope:'all_classes' },{ scope:'specific_class', classId: classId },{ scope:'specific_student', studentId: studentId }] });
+    
+    var classId = student.classId;
+    var fees = await prisma.feeStructure.findMany({ 
+      where: { 
+        tenantId: req.tenantId,
+        session: session, 
+        isActive: true, 
+        term: { in: [term,'all'] },
+        OR: [{ scope:'all_classes' },{ scope:'specific_class', classId: classId },{ scope:'specific_student', studentId: studentId }] 
+      } 
+    });
+
     var items = fees.map(function(fee) {
-      return { feeStructureId: fee._id, feeName: fee.name, feeType: fee.feeType,
+      return { tenantId: req.tenantId, feeStructureId: fee.id, feeName: fee.name, feeType: fee.feeType,
                amount: fee.amount, discount: 0, netAmount: fee.amount, paid: 0, balance: fee.amount, status: 'unpaid' };
     });
-    const mongoose = require('mongoose');
-    const dbSession = await mongoose.startSession();
-    try {
-      await dbSession.withTransaction(async () => {
-        var bill = await StudentBill.findOne({ studentId: studentId, session: session, term: term }).session(dbSession);
-        if (bill) {
-          var existing = bill.items.map(function(x) { return String(x.feeStructureId); });
-          items.filter(function(x) { return !existing.includes(String(x.feeStructureId)); }).forEach(function(ni) { bill.items.push(ni); });
-          bill.revision = (bill.revision || 0) + 1;
-          await bill.save({ session: dbSession });
-        } else {
-          var prevBill = await StudentBill.findOne({ studentId: studentId }).sort({ session: -1, term: -1 }).session(dbSession);
-          var carryOverAmount = prevBill ? prevBill.totalBalance : 0;
-          
-          bill = new StudentBill({ 
-            studentId: studentId, classId: classId, session: session, term: term, 
-            items: items, carryOver: carryOverAmount, createdBy: req.user._id 
-          });
-          await bill.save({ session: dbSession });
+
+    let updatedBill;
+
+    await prisma.$transaction(async (tx) => {
+      var bill = await tx.invoice.findFirst({ where: { studentId: studentId, session: session, term: term, tenantId: req.tenantId }, include: { items: true } });
+      if (bill) {
+        var existing = bill.items.map(function(x) { return x.feeStructureId; });
+        var newItems = items.filter(function(x) { return !existing.includes(x.feeStructureId); });
+        
+        if (newItems.length > 0) {
+           await tx.invoiceLineItem.createMany({
+             data: newItems.map(item => ({ ...item, invoiceId: bill.id }))
+           });
         }
         
-        const OutboxEvent = require('../../models/OutboxEvent');
-        try {
-          await OutboxEvent.create([{
-            type: 'REBUILD_BILL',
-            billId: bill._id,
-            eventKey: `REBUILD_BILL:${bill._id}:${bill.revision || 0}`,
-            status: 'pending',
-            nextRetryAt: new Date()
-          }], { session: dbSession });
-        } catch (e) {
-          if (e.code !== 11000) throw e;
-        }
+        bill.revision = (bill.revision || 0) + 1;
+        updatedBill = await tx.invoice.update({
+          where: { id: bill.id },
+          data: { revision: bill.revision },
+          include: { items: true }
+        });
+      } else {
+        var prevBills = await tx.invoice.findMany({ where: { studentId: studentId, tenantId: req.tenantId }, orderBy: [{ session: 'desc' }, { term: 'desc' }], take: 1 });
+        var prevBill = prevBills[0];
+        var carryOverAmount = prevBill ? prevBill.totalBalance : 0;
+        
+        updatedBill = await tx.invoice.create({
+          data: {
+            tenantId: req.tenantId, studentId: studentId, classId: classId, session: session, term: term, 
+            carryOver: carryOverAmount, items: { create: items }
+          },
+          include: { items: true }
+        });
+      }
+      
+      await tx.outboxEvent.createMany({
+        data: [{
+          tenantId: req.tenantId,
+          type: 'REBUILD_BILL',
+          billId: updatedBill.id,
+          eventKey: `REBUILD_BILL:${updatedBill.id}:${updatedBill.revision || 0}`,
+          status: 'pending'
+        }],
+        skipDuplicates: true
       });
-    } finally {
-      dbSession.endSession();
-    }
+    });
     
-    // Have to retrieve the latest version of the bill for the response, or we could just refetch
-    var updatedBill = await StudentBill.findOne({ studentId: studentId, session: session, term: term });
     return ok(res, { message: 'Bill generated successfully', data: updatedBill }, 201);
   } catch (e) { return bad(res, 500, e.message); }
 };
 
 exports.getAllBills = async function(req, res) {
   try {
-    var StudentBill = getStudentBill();
     var page = Math.max(1, Number(req.query.page)||1), limit = Math.max(1, Number(req.query.limit)||20);
-    var filter = {};
+    var filter = { tenantId: req.tenantId };
     if (req.query.session) filter.session = req.query.session;
     if (req.query.term)    filter.term    = req.query.term;
     if (req.query.classId) filter.classId = req.query.classId;
     if (req.query.status)  filter.status  = req.query.status;
-    var total = await StudentBill.countDocuments(filter);
-    var bills = await StudentBill.find(filter)
-      .populate({ path: 'studentId', select: 'admissionNumber userId', populate: { path: 'userId', select: 'name' } })
-      .populate('classId', 'name section').sort({ createdAt: -1 }).skip((page-1)*limit).limit(limit);
-    var agg = await StudentBill.aggregate([{ $match: filter },
-      { $group: { _id: null, totalBilled: { $sum: '$totalAmount' }, totalPaid: { $sum: '$totalPaid' }, totalBalance: { $sum: '$totalBalance' },
-        countPaid: { $sum: { $cond: [{ $eq: ['$status','paid'] }, 1, 0] } },
-        countPartial: { $sum: { $cond: [{ $eq: ['$status','partial'] }, 1, 0] } },
-        countUnpaid: { $sum: { $cond: [{ $eq: ['$status','unpaid'] }, 1, 0] } } } }]);
-    return ok(res, { pagination: { total: total, page: page, pages: Math.ceil(total/limit) }, summary: agg[0]||{}, data: bills });
+    
+    var total = await prisma.invoice.count({ where: filter });
+    var bills = await prisma.invoice.findMany({
+      where: filter,
+      include: {
+        student: { select: { admissionNumber: true, userId: true, user: { select: { name: true } } } },
+        class: { select: { name: true, section: true } }
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (page-1)*limit,
+      take: limit
+    });
+    
+    var agg = await prisma.invoice.aggregate({
+      where: filter,
+      _sum: { totalAmount: true, totalPaid: true, totalBalance: true }
+    });
+
+    var statuses = await prisma.invoice.groupBy({
+      by: ['status'],
+      where: filter,
+      _count: { _all: true }
+    });
+
+    var countPaid = statuses.find(s => s.status === 'paid')?._count._all || 0;
+    var countPartial = statuses.find(s => s.status === 'partial')?._count._all || 0;
+    var countUnpaid = statuses.find(s => s.status === 'unpaid')?._count._all || 0;
+
+    var summary = {
+      totalBilled: agg._sum.totalAmount || 0,
+      totalPaid: agg._sum.totalPaid || 0,
+      totalBalance: agg._sum.totalBalance || 0,
+      countPaid, countPartial, countUnpaid
+    };
+
+    return ok(res, { pagination: { total: total, page: page, pages: Math.ceil(total/limit) }, summary: summary, data: bills });
   } catch (e) { return bad(res, 500, e.message); }
 };
 
 exports.getStudentBills = async function(req, res) {
   try {
-    var Student = getStudent();
     if (req.user.role !== 'admin') {
-      var student = await Student.findById(req.params.studentId);
+      var student = await prisma.student.findFirst({ where: { id: req.params.studentId, tenantId: req.tenantId } });
       if (!student) return bad(res, 404, 'Student not found');
-      if (req.user.role === 'parent' && String(student.parentId) !== String(req.user._id)) return bad(res, 403, 'Access denied');
-      if (req.user.role === 'student' && String(student.userId) !== String(req.user._id)) return bad(res, 403, 'Access denied');
+      if (req.user.role === 'parent' && student.parentId !== req.user.id) return bad(res, 403, 'Access denied');
+      if (req.user.role === 'student' && student.userId !== req.user.id) return bad(res, 403, 'Access denied');
     }
 
-    var StudentBill = getStudentBill();
-    var filter = { studentId: req.params.studentId };
+    var filter = { studentId: req.params.studentId, tenantId: req.tenantId };
     if (req.query.session) filter.session = req.query.session;
     if (req.query.term)    filter.term    = req.query.term;
-    var bills = await StudentBill.find(filter).populate('classId','name section')
-      .populate('items.feeStructureId','name allowInstallment minInstallment').sort({ session:-1, term:-1 });
-    return ok(res, { totals: { totalBilled: bills.reduce(function(s,b){return s+b.totalAmount;},0),
-      totalPaid: bills.reduce(function(s,b){return s+b.totalPaid;},0),
-      totalBalance: bills.reduce(function(s,b){return s+b.totalBalance;},0) }, data: bills });
+    
+    var bills = await prisma.invoice.findMany({
+      where: filter,
+      include: {
+        class: { select: { name: true, section: true } },
+        items: { include: { feeStructure: { select: { name: true, allowInstallment: true, minInstallment: true } } } }
+      },
+      orderBy: [{ session: 'desc' }, { term: 'desc' }]
+    });
+
+    return ok(res, { totals: { 
+      totalBilled: bills.reduce((s,b)=>s+b.totalAmount,0),
+      totalPaid: bills.reduce((s,b)=>s+b.totalPaid,0),
+      totalBalance: bills.reduce((s,b)=>s+b.totalBalance,0) 
+    }, data: bills });
   } catch (e) { return bad(res, 500, e.message); }
 };
 
 exports.getBill = async function(req, res) {
   try {
-    var StudentBill = getStudentBill();
-    var bill = await StudentBill.findById(req.params.id)
-      .populate({ path:'studentId', select:'admissionNumber userId classId parentId', populate:{path:'userId',select:'name email'} })
-      .populate('classId','name section').populate('items.feeStructureId','name feeType allowInstallment minInstallment');
+    var bill = await prisma.invoice.findFirst({
+      where: { id: req.params.id, tenantId: req.tenantId },
+      include: {
+        student: { select: { admissionNumber: true, userId: true, classId: true, parentId: true, user: { select: { name: true, email: true } } } },
+        class: { select: { name: true, section: true } },
+        items: { include: { feeStructure: { select: { name: true, feeType: true, allowInstallment: true, minInstallment: true } } } }
+      }
+    });
+
     if (!bill) return bad(res, 404, 'Bill not found');
 
     if (req.user.role !== 'admin') {
-      if (req.user.role === 'parent' && String(bill.studentId.parentId) !== String(req.user._id)) return bad(res, 403, 'Access denied');
-      if (req.user.role === 'student' && String(bill.studentId.userId._id || bill.studentId.userId) !== String(req.user._id)) return bad(res, 403, 'Access denied');
+      if (req.user.role === 'parent' && bill.student.parentId !== req.user.id) return bad(res, 403, 'Access denied');
+      if (req.user.role === 'student' && bill.student.userId !== req.user.id) return bad(res, 403, 'Access denied');
     }
 
     return ok(res, { data: bill });
   } catch (e) { return bad(res, 500, e.message); }
 };
 
-
-
 exports.applyAdjustment = async function(req, res) {
   try {
-    const StudentBill = getStudentBill();
-    const BillAdjustment = require('../../models/BillAdjustment');
-
     const { itemId, type, amount, reason } = req.body;
     if (!['discount', 'waiver', 'penalty', 'scholarship'].includes(type)) {
       return bad(res, 400, 'Invalid adjustment type');
     }
 
-    const bill = await StudentBill.findById(req.params.id);
+    const bill = await prisma.invoice.findFirst({ where: { id: req.params.id, tenantId: req.tenantId }, include: { items: true } });
     if (!bill) return bad(res, 404, 'Bill not found');
     
-    const item = bill.items.id(itemId);
+    const item = bill.items.find(i => i.id === itemId);
     if (!item) return bad(res, 404, 'Line item not found');
 
     if (amount <= 0) return bad(res, 400, 'Amount must be positive');
 
-    // WRITE FIRST: Create event only
-    await BillAdjustment.create({
-      billId: bill._id,
-      itemId,
-      type,
-      amount,
-      reason: reason || 'Manual adjustment',
-      approvedBy: req.user._id
+    await prisma.billAdjustment.create({
+      data: {
+        tenantId: req.tenantId,
+        billId: bill.id,
+        itemId,
+        type,
+        amount,
+        reason: reason || 'Manual adjustment',
+        approvedBy: req.user.id
+      }
     });
 
-    // Increment Revision ONLY for Adjustments
-    const mongoose = require('mongoose');
-    await StudentBill.updateOne({ _id: bill._id }, { $inc: { revision: 1 } });
+    await prisma.invoice.update({ where: { id: bill.id }, data: { revision: { increment: 1 } } });
 
-    // BACKGROUND: Enqueue deterministic rebuild projection
     const { enqueueSyncJob } = require('../../utils/syncQueue');
-    await enqueueSyncJob(bill._id.toString());
+    await enqueueSyncJob(bill.id);
 
-    // RETURN FAST
     return ok(res, { message: type + ' logged successfully. Pending rebuild.' });
   } catch (e) {
     return bad(res, e.message.includes('not found') ? 404 : 500, e.message);
   }
 };
 
-
-
 exports.syncBill = async function(req, res) {
   try {
     const ledgerService = require('../../services/ledgerService');
-    const StudentBill = getStudentBill();
-    
-    const bill = await StudentBill.findById(req.params.id);
+    const bill = await prisma.invoice.findFirst({ where: { id: req.params.id, tenantId: req.tenantId } });
     if (!bill) return bad(res, 404, 'Bill not found');
 
-    // Trigger deterministic rebuild projection
-    const finalBill = await ledgerService.rebuildBillBalances(bill._id);
+    const finalBill = await ledgerService.rebuildBillBalances(bill.id);
     return ok(res, { message: 'Bill reconstructed from events', data: finalBill });
   } catch (e) { return bad(res, 500, e.message); }
 };
 
-
 exports.deleteBill = async function(req, res) {
   try {
-    var StudentBill = getStudentBill();
-    var bill = await StudentBill.findById(req.params.id);
+    var bill = await prisma.invoice.findFirst({ where: { id: req.params.id, tenantId: req.tenantId } });
     if (!bill) return bad(res, 404, 'Bill not found');
     if (bill.totalPaid > 0) return bad(res, 400, 'Cannot delete bill with payments');
-    await StudentBill.findByIdAndDelete(req.params.id);
+    await prisma.invoice.delete({ where: { id: req.params.id } });
     return ok(res, { message: 'Bill deleted' });
   } catch (e) { return bad(res, 500, e.message); }
 };
 
 exports.getDefaulters = async function(req, res) {
   try {
-    var StudentBill = getStudentBill();
     var filter = {
-      status:       { $in: ['unpaid', 'partial'] },
-      totalBalance: { $gt: Number(req.query.minBalance) || 0 },
+      tenantId: req.tenantId,
+      status: { in: ['unpaid', 'partial'] },
+      totalBalance: { gt: Number(req.query.minBalance) || 0 },
     };
     if (req.query.session) filter.session = req.query.session;
     if (req.query.term)    filter.term    = req.query.term;
     if (req.query.classId) filter.classId = req.query.classId;
 
-    var bills = await StudentBill.find(filter)
-      .populate({ path: 'studentId', select: 'admissionNumber userId',
-                  populate: { path: 'userId', select: 'name email' } })
-      .populate('classId', 'name section')
-      .sort({ totalBalance: -1 });
+    var bills = await prisma.invoice.findMany({
+      where: filter,
+      include: {
+        student: { select: { admissionNumber: true, userId: true, user: { select: { name: true, email: true } } } },
+        class: { select: { name: true, section: true } }
+      },
+      orderBy: { totalBalance: 'desc' }
+    });
 
     return ok(res, {
       count: bills.length,
-      totalOutstanding: bills.reduce(function(s,b){ return s + b.totalBalance; }, 0),
+      totalOutstanding: bills.reduce((s,b)=> s + b.totalBalance, 0),
       data:  bills,
     });
   } catch (e) { return bad(res, 500, e.message); }
@@ -485,51 +472,51 @@ exports.siblingTransfer = async function(req, res) {
       return bad(res, 400, 'sourceBillId, targetBillId, sourceItemId, targetItemId, and amount are required');
     }
 
-    const StudentBill = getStudentBill();
-    const BillAdjustment = require('../../models/BillAdjustment');
-    const mongoose = require('mongoose');
-
-    const sourceBill = await StudentBill.findById(sourceBillId);
-    const targetBill = await StudentBill.findById(targetBillId);
+    const sourceBill = await prisma.invoice.findFirst({ where: { id: sourceBillId, tenantId: req.tenantId }, include: { items: true } });
+    const targetBill = await prisma.invoice.findFirst({ where: { id: targetBillId, tenantId: req.tenantId }, include: { items: true } });
 
     if (!sourceBill || !targetBill) return bad(res, 404, 'Source or target bill not found');
 
-    const sourceItem = sourceBill.items.id(sourceItemId);
-    const targetItem = targetBill.items.id(targetItemId);
+    const sourceItem = sourceBill.items.find(i => i.id === sourceItemId);
+    const targetItem = targetBill.items.find(i => i.id === targetItemId);
 
     if (!sourceItem || !targetItem) return bad(res, 404, 'Source or target item not found');
 
-    const transferGroupId = new mongoose.Types.ObjectId().toString();
+    const transferGroupId = require('crypto').randomUUID();
 
-    await BillAdjustment.create({
-      billId: sourceBillId,
-      itemId: sourceItemId,
-      type: 'transfer_out',
-      amount,
-      reason: reason || 'Sibling transfer to ' + targetBillId,
-      transferGroupId,
-      approvedBy: req.user._id
+    await prisma.billAdjustment.createMany({
+      data: [
+        {
+          tenantId: req.tenantId,
+          billId: sourceBillId,
+          itemId: sourceItemId,
+          type: 'transfer_out',
+          amount,
+          reason: reason || 'Sibling transfer to ' + targetBillId,
+          transferGroupId,
+          approvedBy: req.user.id
+        },
+        {
+          tenantId: req.tenantId,
+          billId: targetBillId,
+          itemId: targetItemId,
+          type: 'transfer_in',
+          amount,
+          reason: reason || 'Sibling transfer from ' + sourceBillId,
+          transferGroupId,
+          approvedBy: req.user.id
+        }
+      ]
     });
 
-    await BillAdjustment.create({
-      billId: targetBillId,
-      itemId: targetItemId,
-      type: 'transfer_in',
-      amount,
-      reason: reason || 'Sibling transfer from ' + sourceBillId,
-      transferGroupId,
-      approvedBy: req.user._id
-    });
-
-    await StudentBill.updateOne({ _id: sourceBillId }, { $inc: { revision: 1 } });
-    await StudentBill.updateOne({ _id: targetBillId }, { $inc: { revision: 1 } });
+    await prisma.invoice.update({ where: { id: sourceBillId }, data: { revision: { increment: 1 } } });
+    await prisma.invoice.update({ where: { id: targetBillId }, data: { revision: { increment: 1 } } });
 
     const { enqueueSyncJob } = require('../../utils/syncQueue');
-    await enqueueSyncJob(sourceBillId.toString());
-    await enqueueSyncJob(targetBillId.toString());
+    await enqueueSyncJob(sourceBillId);
+    await enqueueSyncJob(targetBillId);
 
     return ok(res, { message: 'Sibling transfer logged successfully. Both bills pending rebuild.' });
-
   } catch (e) {
     console.error('[siblingTransfer]', e.stack || e.message);
     return bad(res, 500, e.message || 'Failed to process sibling transfer');
@@ -540,11 +527,10 @@ exports.reconcileBills = async function(req, res) {
   try {
     const { classId, session, term, billIds, reason } = req.body;
     
-    const StudentBill = getStudentBill();
-    let filter = {};
+    let filter = { tenantId: req.tenantId };
     
     if (billIds && Array.isArray(billIds) && billIds.length > 0) {
-      filter._id = { $in: billIds };
+      filter.id = { in: billIds };
     } else {
       if (!session && !term && !classId) {
         return bad(res, 400, 'Must provide either billIds array OR session/term/classId filters');
@@ -554,7 +540,7 @@ exports.reconcileBills = async function(req, res) {
       if (classId) filter.classId = classId;
     }
 
-    const bills = await StudentBill.find(filter).select('_id');
+    const bills = await prisma.invoice.findMany({ where: filter, select: { id: true } });
     
     if (!bills.length) {
       return bad(res, 404, 'No bills found matching the given criteria');
@@ -563,14 +549,9 @@ exports.reconcileBills = async function(req, res) {
     const { enqueueSyncJob } = require('../../utils/syncQueue');
     
     for (const bill of bills) {
-      // Re-enqueue every matching bill. ZADD NX will inherently deduplicate
-      // if it's already in the queue, but if it's not, it will be queued for
-      // deterministic re-projection by the Phase 4 engine.
-      await enqueueSyncJob(bill._id.toString());
+      await enqueueSyncJob(bill.id);
     }
 
-    // Reason can optionally be logged to an audit table here if desired, 
-    // but the Phase 4 engine handles the raw correctness independently.
     if (reason) {
       console.log(`[Reconciliation] ${bills.length} bills enqueued. Reason: ${reason}`);
     }

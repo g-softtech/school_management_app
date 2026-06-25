@@ -53,6 +53,10 @@ app.get('/api/health', function(req, res) {
 // requests originate before any tenantId is established on the client.
 app.use('/api/auth',      require('./src/modules/auth/auth.routes'));
 
+// ── Public Provisioning ───────────────────────────────────────────────────────
+// Must sit BEFORE tenantContext so new schools can sign up globally
+app.use('/api/public', require('./src/routes/provision.routes'));
+
 // ── Tenant Context Gate ────────────────────────────────────────────────────────
 // All routes mounted AFTER this point require a valid X-Tenant-ID header.
 // The middleware resolves the tenant from PostgreSQL and injects req.tenantId.
@@ -113,3 +117,6 @@ app.all('/{*path}', function(req, res, next) {
 app.use(errorHandler);
 
 module.exports = app;
+
+
+

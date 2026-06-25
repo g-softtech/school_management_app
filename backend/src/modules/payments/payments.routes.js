@@ -7,6 +7,9 @@ const restrictTo = require('../../middleware/roleMiddleware');
 // Public — Paystack webhook
 router.post('/webhook', ctrl.webhook);
 
+const { checkFeature } = require('../../utils/featureGuard');
+router.use(checkFeature('feature_finance'));
+
 router.use(protect);
 
 // Analytics

@@ -35,6 +35,7 @@ exports.getAttendance = async (req, res) => {
     queryDate.setUTCHours(0, 0, 0, 0);
 
     const attendance = await Attendance.findOne({
+      tenantId: req.tenantId,
       classId,
       date: queryDate,
       term: queryTerm,
@@ -96,6 +97,7 @@ exports.saveAttendance = async (req, res) => {
     }
 
     let attendance = await Attendance.findOne({
+      tenantId: req.tenantId,
       classId,
       date: queryDate,
       term: queryTerm,
@@ -113,6 +115,7 @@ exports.saveAttendance = async (req, res) => {
     } else {
       // Create new
       attendance = await Attendance.create({
+        tenantId: req.tenantId,
         classId,
         date: queryDate,
         term: queryTerm,

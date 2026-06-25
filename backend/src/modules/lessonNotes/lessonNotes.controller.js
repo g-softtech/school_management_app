@@ -1,11 +1,8 @@
-const LessonNote = require('../../models/LessonNote');
-const Subject    = require('../../models/Subject');
-const Class      = require('../../models/Class');
+const prisma = require('../../config/prisma');
 const ApiError   = require('../../utils/ApiError');
 const catchAsync = require('../../utils/catchAsync');
 const paginate   = require('../../utils/paginate');
 
-// Helper — build file info from multer
 function getFileInfo(req) {
   if (!req.file) return { fileUrl: null, fileName: null };
   return {
@@ -14,49 +11,47 @@ function getFileInfo(req) {
   };
 }
 
-// POST /api/lesson-notes
-// Teacher, Admin
 exports.createLessonNote = catchAsync(async function(req, res, next) {
   var b = req.body;
   if (!b.classId || !b.subjectId || !b.topic || !b.week || !b.term || !b.session) {
     return next(new ApiError(400, 'Please provide classId, subjectId, topic, week, term and session'));
   }
 
-  // Teachers can only create notes for subjects assigned to them
   if (req.user.role === 'teacher') {
-    var subject = await Subject.findOne({ _id: b.subjectId, teacherId: req.user._id });
+    var subject = await prisma.subject.findFirst({ where: { id: b.subjectId, teacherId: req.user.id, tenantId: req.tenantId } });
     if (!subject) return next(new ApiError(403, 'You can only create lesson notes for subjects assigned to you'));
   }
 
   var fileInfo = getFileInfo(req);
 
-  var note = await LessonNote.create({
-    teacherId:   req.user._id,
-    classId:     b.classId,
-    subjectId:   b.subjectId,
-    topic:       b.topic,
-    week:        Number(b.week),
-    term:        b.term,
-    session:     b.session,
-    content:     b.content || null,
-    fileUrl:     fileInfo.fileUrl,
-    fileName:    fileInfo.fileName,
-    isPublished: b.isPublished !== undefined ? b.isPublished : true,
+  var note = await prisma.lessonNote.create({
+    data: {
+      tenantId:    req.tenantId,
+      teacherId:   req.user.id,
+      classId:     b.classId,
+      subjectId:   b.subjectId,
+      topic:       b.topic,
+      week:        Number(b.week),
+      term:        b.term,
+      session:     b.session,
+      content:     b.content || null,
+      fileUrl:     fileInfo.fileUrl,
+      fileName:    fileInfo.fileName,
+      isPublished: b.isPublished !== undefined ? (b.isPublished === 'true' || b.isPublished === true) : true,
+    },
+    include: {
+      teacher: { select: { name: true } },
+      class: { select: { name: true, section: true } },
+      subject: { select: { name: true, code: true } }
+    }
   });
 
-  var populated = await LessonNote.findById(note._id)
-    .populate('teacherId', 'name')
-    .populate('classId',   'name section')
-    .populate('subjectId', 'name code');
-
-  res.status(201).json({ success: true, message: 'Lesson note created successfully', data: populated });
+  res.status(201).json({ success: true, message: 'Lesson note created successfully', data: note });
 });
 
-// GET /api/lesson-notes
-// Teacher (own), Student (their class), Admin
 exports.getLessonNotes = catchAsync(async function(req, res, next) {
   var p = paginate(req.query);
-  var filter = {};
+  var filter = { tenantId: req.tenantId };
 
   if (req.query.classId)   filter.classId   = req.query.classId;
   if (req.query.subjectId) filter.subjectId = req.query.subjectId;
@@ -64,26 +59,30 @@ exports.getLessonNotes = catchAsync(async function(req, res, next) {
   if (req.query.session)   filter.session   = req.query.session;
   if (req.query.week)      filter.week      = Number(req.query.week);
 
-  // Teachers only see their own notes
-  if (req.user.role === 'teacher') filter.teacherId = req.user._id;
+  if (req.user.role === 'teacher') filter.teacherId = req.user.id;
 
-  // Students only see published notes for their class
   if (req.user.role === 'student') {
-    var Student = require('../../models/Student');
-    var student = await Student.findOne({ userId: req.user._id });
+    var student = await prisma.student.findFirst({ where: { userId: req.user.id, tenantId: req.tenantId } });
     if (!student) return next(new ApiError(404, 'Student profile not found'));
     filter.classId    = student.classId;
     filter.isPublished = true;
   }
 
-  var total = await LessonNote.countDocuments(filter);
-  var notes = await LessonNote.find(filter)
-    .populate('teacherId', 'name')
-    .populate('classId',   'name section')
-    .populate('subjectId', 'name code')
-    .sort({ week: 1, createdAt: -1 })
-    .skip(p.skip)
-    .limit(p.limit);
+  var total = await prisma.lessonNote.count({ where: filter });
+  var notes = await prisma.lessonNote.findMany({
+    where: filter,
+    include: {
+      teacher: { select: { name: true } },
+      class: { select: { name: true, section: true } },
+      subject: { select: { name: true, code: true } }
+    },
+    orderBy: [
+      { week: 'asc' },
+      { createdAt: 'desc' }
+    ],
+    skip: p.skip,
+    take: p.limit
+  });
 
   res.status(200).json({
     success: true,
@@ -92,29 +91,30 @@ exports.getLessonNotes = catchAsync(async function(req, res, next) {
   });
 });
 
-// GET /api/lesson-notes/:id
 exports.getLessonNote = catchAsync(async function(req, res, next) {
-  var note = await LessonNote.findById(req.params.id)
-    .populate('teacherId', 'name')
-    .populate('classId',   'name section')
-    .populate('subjectId', 'name code');
+  var note = await prisma.lessonNote.findFirst({
+    where: { id: req.params.id, tenantId: req.tenantId },
+    include: {
+      teacher: { select: { name: true } },
+      class: { select: { name: true, section: true } },
+      subject: { select: { name: true, code: true } }
+    }
+  });
 
   if (!note) return next(new ApiError(404, 'Lesson note not found'));
 
-  // Teacher can only see their own
-  if (req.user.role === 'teacher' && String(note.teacherId._id) !== String(req.user._id)) {
+  if (req.user.role === 'teacher' && note.teacherId !== req.user.id) {
     return next(new ApiError(403, 'You can only view your own lesson notes'));
   }
 
   res.status(200).json({ success: true, data: note });
 });
 
-// PATCH /api/lesson-notes/:id
 exports.updateLessonNote = catchAsync(async function(req, res, next) {
-  var note = await LessonNote.findById(req.params.id);
+  var note = await prisma.lessonNote.findFirst({ where: { id: req.params.id, tenantId: req.tenantId } });
   if (!note) return next(new ApiError(404, 'Lesson note not found'));
 
-  if (req.user.role === 'teacher' && String(note.teacherId) !== String(req.user._id)) {
+  if (req.user.role === 'teacher' && note.teacherId !== req.user.id) {
     return next(new ApiError(403, 'You can only update your own lesson notes'));
   }
 
@@ -127,26 +127,30 @@ exports.updateLessonNote = catchAsync(async function(req, res, next) {
   if (b.week        !== undefined) fields.week        = Number(b.week);
   if (b.term        !== undefined) fields.term        = b.term;
   if (b.session     !== undefined) fields.session     = b.session;
-  if (b.isPublished !== undefined) fields.isPublished = b.isPublished;
+  if (b.isPublished !== undefined) fields.isPublished = b.isPublished === 'true' || b.isPublished === true;
   if (fileInfo.fileUrl) { fields.fileUrl = fileInfo.fileUrl; fields.fileName = fileInfo.fileName; }
 
-  var updated = await LessonNote.findByIdAndUpdate(req.params.id, fields, { new: true, runValidators: true })
-    .populate('teacherId', 'name')
-    .populate('classId',   'name section')
-    .populate('subjectId', 'name code');
+  var updated = await prisma.lessonNote.update({
+    where: { id: req.params.id },
+    data: fields,
+    include: {
+      teacher: { select: { name: true } },
+      class: { select: { name: true, section: true } },
+      subject: { select: { name: true, code: true } }
+    }
+  });
 
   res.status(200).json({ success: true, message: 'Lesson note updated successfully', data: updated });
 });
 
-// DELETE /api/lesson-notes/:id
 exports.deleteLessonNote = catchAsync(async function(req, res, next) {
-  var note = await LessonNote.findById(req.params.id);
+  var note = await prisma.lessonNote.findFirst({ where: { id: req.params.id, tenantId: req.tenantId } });
   if (!note) return next(new ApiError(404, 'Lesson note not found'));
 
-  if (req.user.role === 'teacher' && String(note.teacherId) !== String(req.user._id)) {
+  if (req.user.role === 'teacher' && note.teacherId !== req.user.id) {
     return next(new ApiError(403, 'You can only delete your own lesson notes'));
   }
 
-  await LessonNote.findByIdAndDelete(req.params.id);
+  await prisma.lessonNote.delete({ where: { id: req.params.id } });
   res.status(200).json({ success: true, message: 'Lesson note deleted successfully' });
 });

@@ -5,7 +5,10 @@ const protect    = require('../../middleware/authMiddleware');
 const restrictTo = require('../../middleware/roleMiddleware');
 const { uploadLesson } = require('../../middleware/upload');
 
+const { checkFeature } = require('../../utils/featureGuard');
+
 router.use(protect);
+router.use(checkFeature('feature_lesson_notes'));
 
 router.get('/',    restrictTo('admin', 'teacher', 'student'), getLessonNotes);
 router.post('/',   restrictTo('admin', 'teacher'), uploadLesson, createLessonNote);

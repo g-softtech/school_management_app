@@ -3,7 +3,9 @@ const router     = express.Router();
 const ctrl       = require('./studentBill.controller');
 const protect    = require('../../middleware/authMiddleware');
 const restrictTo = require('../../middleware/roleMiddleware');
+const { checkFeature } = require('../../utils/featureGuard');
 
+router.use(checkFeature('feature_finance'));
 router.use(protect);
 
 router.post('/generate',          restrictTo('admin'), ctrl.generateBills);

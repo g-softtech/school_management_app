@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import LedgerAuditModal from '../../components/admin/LedgerAuditModal';
+import { FeatureGate } from '../../context/FeatureFlagContext';
+import UpgradeFallback from '../../components/common/UpgradeFallback';
 
 const FinancialObservability = () => {
   const [healthStats, setHealthStats] = useState(null);
@@ -75,7 +77,11 @@ const FinancialObservability = () => {
 
   return (
     <DashboardLayout title="Financial Observability">
-      <div className="p-6 space-y-8">
+      <FeatureGate 
+        flag="feature_finance" 
+        fallback={<UpgradeFallback title="Financial Observability Locked" requiredPlan="PREMIUM" />}
+      >
+        <div className="p-6 space-y-8">
         
         {/* System Health Widget */}
         <section>
@@ -303,7 +309,8 @@ const FinancialObservability = () => {
         {auditUserId && (
           <LedgerAuditModal userId={auditUserId} onClose={() => setAuditUserId(null)} />
         )}
-      </div>
+        </div>
+      </FeatureGate>
     </DashboardLayout>
   );
 };

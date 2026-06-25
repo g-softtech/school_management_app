@@ -17,6 +17,8 @@ import {
 import { getClasses } from '../../services/classService';
 import { formatCurrency, formatDate, getErrorMessage } from '../../utils/helpers';
 import { TERMS, SESSIONS } from '../../utils/constants';
+import { FeatureGate } from '../../context/FeatureFlagContext';
+import UpgradeFallback from '../../components/common/UpgradeFallback';
 
 const STATUS_CONFIG = {
   paid:     { label: 'Paid',     variant: 'success', icon: FiCheckCircle, color: 'text-green-600'  },
@@ -193,8 +195,9 @@ export default function AdminBilling() {
   });
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <FeatureGate flag="feature_invoices" fallback={<UpgradeFallback title="Billing & Invoicing Locked" requiredPlan="PREMIUM" />}>
+      <div className="space-y-6">
+        {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="page-title flex items-center gap-2">
@@ -507,6 +510,7 @@ export default function AdminBilling() {
         title="Delete Bill"
         message={`Delete bill for ${deleting?.studentId?.userId?.name}? Only bills with no payments can be deleted.`}
       />
-    </div>
+      </div>
+    </FeatureGate>
   );
 }
