@@ -109,8 +109,8 @@ export default function AppRoutes() {
     'localhost',
   ];
   
-  // If the host is perfectly our primary site, or running locally, or on Vercel preview:
-  const isPlatformHost = CORE_DOMAINS.includes(hostname) || hostname.includes('vercel.app');
+  // If the host is perfectly our primary site, or running locally, or on Vercel/Render preview:
+  const isPlatformHost = CORE_DOMAINS.includes(hostname) || hostname.includes('vercel.app') || hostname.includes('onrender.com');
 
   if (isPlatformHost) {
     return (
