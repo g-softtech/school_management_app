@@ -131,29 +131,50 @@ exports.login = catchAsync(async (req, res, next) => {
     return next(new ApiError(400, 'Please provide email and password'));
   }
 
-  // Resolve tenant — auth routes are pre-gate, so we resolve inline
-  const tenant = await resolveTenant(req);
+  // 1. Resolve tenant context from Host or X-Tenant-ID
+  let tenant = await resolveTenant(req);
+  let user = null;
+
+  // 2. If NO tenant is provided (i.e., Centralized Login Portal)
   if (!tenant) {
-    return next(new ApiError(400, 'Missing tenant context. Ensure the X-Tenant-ID header is present.'));
+    // Search across ALL schools for this email
+    const users = await prisma.user.findMany({
+      where: { email: email.toLowerCase() },
+      include: { tenant: { select: { id: true, name: true } } }
+    });
+
+    if (users.length === 0) {
+      // Dummy check to prevent timing attacks
+      await bcrypt.compare(password, '$2b$12$invalidhashpadding000000000000000000000000000000000');
+      return next(new ApiError(401, 'Incorrect email or password'));
+    }
+
+    if (users.length > 1) {
+      // User exists in multiple schools! Return the selection array.
+      return res.status(300).json({
+        success: false,
+        message: 'Multiple schools found. Please select your workspace.',
+        action: 'SELECT_WORKSPACE',
+        schools: users.map(u => ({ tenantId: u.tenant.id, name: u.tenant.name }))
+      });
+    }
+
+    // Exactly 1 user found across the platform. Auto-select their tenant.
+    user = users[0];
+    tenant = user.tenant;
+  } else {
+    // 3. Tenant was provided (Custom Domain / Subdomain login)
+    user = await prisma.user.findUnique({
+      where: {
+        tenantId_email: {
+          tenantId: tenant.id,
+          email:    email.toLowerCase(),
+        },
+      },
+      include: { tenant: { select: { id: true, name: true } } }
+    });
   }
 
-  // Tenant-scoped user lookup — @@unique([tenantId, email])
-  const user = await prisma.user.findUnique({
-    where: {
-      tenantId_email: {
-        tenantId: tenant.id,
-        email:    email.toLowerCase(),
-      },
-    },
-    // Select password explicitly (omitted from normal selects for security)
-    select: {
-      id: true, name: true, email: true, role: true,
-      tenantId: true, isActive: true, password: true,
-    },
-  });
-
-  // Constant-time comparison: always run bcrypt even on missing user to prevent
-  // timing attacks that could enumerate valid email addresses.
   const passwordMatch = user
     ? await bcrypt.compare(password, user.password)
     : await bcrypt.compare(password, '$2b$12$invalidhashpadding000000000000000000000000000000000'); // dummy

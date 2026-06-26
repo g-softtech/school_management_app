@@ -2,6 +2,8 @@ generator client {
   provider = "prisma-client-js"
 }
 
+
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -48,7 +50,7 @@ model Tenant {
   SchoolEvent       SchoolEvent[]
   NotificationToken NotificationToken[]
   SupportTicket     SupportTicket[]
-  schoolWebsites    SchoolWebsite[]
+  schoolWebsite     SchoolWebsite?
   blogPosts         BlogPost[]
   testimonials      Testimonial[]
   galleryItems      GalleryItem[]
@@ -1317,20 +1319,32 @@ model TenantRequest {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model SchoolWebsite {
-  id           String  @id @default(cuid())
-  tenantId     String
-  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  themeColor   String? @default("#000000")
-  logoUrl      String?
-  contactEmail String?
-  heroText     String?
-  aboutUs      String?
-  isPublished  Boolean @default(true)
+  id           String @id @default(cuid())
+  tenantId     String @unique
+  tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  customDomain String @unique
+  primaryColor String @default("#000000")
+  secondaryColor String @default("#ffffff")
+  logoUrl      String?
+  
+  heroTitle    String?
+  heroSubtitle String?
+  aboutText    String?
+  
+  contactEmail String?
+  contactPhone String?
+  address      String?
+  
+  gallery        String[]
+  activities     Json?
+  testimonials   Json?
+  admissionSteps Json?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  @@index([tenantId])
+  @@index([customDomain])
 }
 
 model BlogPost {

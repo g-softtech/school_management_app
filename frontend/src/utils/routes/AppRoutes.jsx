@@ -12,6 +12,7 @@ import PlatformDashboard from '../../pages/platform/PlatformDashboard';
 import PublicLayout  from '../../components/public/PublicLayout';
 import Home          from '../../pages/public/Home';
 import About         from '../../pages/public/About';
+import SchoolCustomLandingPage from '../../pages/public/SchoolCustomLandingPage';
 import Academics     from '../../pages/public/Academics';
 import Admissions    from '../../pages/public/Admissions';
 import Gallery       from '../../pages/public/Gallery';
@@ -210,19 +211,12 @@ export default function AppRoutes() {
     );
   }
 
-  // ─── TENANT SUBDOMAIN / CUSTOM DOMAIN ROUTING ────────────────────────────
-  // If we reach here, it means we are either on greensprings.thecortexsystems.com
-  // or a custom domain like greenspringsacademy.com
+  // ─── TENANT CUSTOM DOMAIN ROUTING ────────────────────────────
+  // If we reach here, it means we are on a custom domain like greenspringsacademy.com
   return (
     <Routes>
-
-      {/* ── Public website ───────────────────────────────────────────────────── */}
-      <Route path="/"           element={<Public><Home /></Public>} />
-      <Route path="/about"      element={<Public><About /></Public>} />
-      <Route path="/academics"  element={<Public><Academics /></Public>} />
-      <Route path="/admissions" element={<Public><Admissions /></Public>} />
-      <Route path="/gallery"    element={<Public><Gallery /></Public>} />
-      <Route path="/contact"    element={<Public><Contact /></Public>} />
+      {/* ── Public website (Dynamic Builder) ─────────────────────────────────── */}
+      <Route path="/" element={<SchoolCustomLandingPage />} />
 
       {/* ── Auth ─────────────────────────────────────────────────────────────── */}
       <Route path="/login"          element={<LoginRoute />} />

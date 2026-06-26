@@ -61,3 +61,4 @@ This document tracks the historical completion of core architectural shifts and 
 | 2026-06-25 | Lesson Notes | Refactored controller to Prisma, enforced `tenantId` pre-scoping, and protected routes with `feature_lesson_notes` guard | Verified |
 | 2026-06-25 | Integration Tests | Created and executed `test-tenant-isolation.js` to assert provisioning logic, module gating, and cross-tenant isolation boundaries. All tests passed. | Verified |
 | 2026-06-25 | Frontend React App | Implemented `api.js` (Enterprise Axios singleton with subdomain parsing) and `FeatureFlagContext.js` (Provider, `useFeature`, and `FeatureGate`) | Completed |
+| 2026-06-26 | Phase 9.1 Architecture | Implemented centralized login flow across all schools, stripped subdomain routing in favor of Custom Domains, built the dynamic `SchoolWebsite` DB schema and frontend public `<SchoolCustomLandingPage />` template resolver. | Verified |

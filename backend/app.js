@@ -63,6 +63,9 @@ app.use('/api/public', require('./src/routes/provision.routes'));
 // Must sit BEFORE tenantContext as it is global to the SaaS Owner
 app.use('/api/platform', require('./src/routes/platform.routes'));
 
+// ── Website Builder Config ────────────────────────────────────────────────────
+app.use('/api/website', require('./src/routes/websiteBuilder.routes'));
+
 // ── Tenant Context Gate ────────────────────────────────────────────────────────
 // All routes mounted AFTER this point require a valid X-Tenant-ID header.
 // The middleware resolves the tenant from PostgreSQL and injects req.tenantId.
