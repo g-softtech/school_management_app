@@ -27,15 +27,23 @@ export default function Login() {
   const [form, setForm]           = useState({ email: '', password: '' });
   const [showPass, setShowPass]   = useState(false);
   const [loading, setLoading]     = useState(false);
+  const [schoolsToSelect, setSchoolsToSelect] = useState([]);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (e, specificTenantId = null) => {
+    if (e) e.preventDefault();
     if (!form.email || !form.password) { toast.error('Please enter email and password'); return; }
     setLoading(true);
     try {
-      const res = await loginUser(form);
+      const res = await loginUser(form, specificTenantId);
+      
+      if (res.data.action === 'SELECT_WORKSPACE') {
+        setSchoolsToSelect(res.data.schools);
+        toast.info(res.data.message);
+        return;
+      }
+
       const { accessToken, user } = res.data;
       login(accessToken, user);
       toast.success(`Welcome back, ${user.name.split(' ')[0]}!`);
@@ -135,10 +143,33 @@ export default function Login() {
               <p className="text-secondary-500 text-sm mt-1">Sign in to your school portal</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Email */}
-              <div>
-                <label className="input-label">Email address</label>
+            {schoolsToSelect.length > 0 ? (
+              <div className="space-y-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">Select a workspace to continue:</p>
+                {schoolsToSelect.map(school => (
+                  <button
+                    key={school.tenantId}
+                    onClick={() => handleSubmit(null, school.tenantId)}
+                    disabled={loading}
+                    className="w-full p-4 border border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 flex items-center justify-between text-left transition-colors"
+                  >
+                    <span className="font-semibold text-gray-800">{school.name}</span>
+                    <FiArrowLeft className="rotate-180 text-primary-500" />
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setSchoolsToSelect([])}
+                  className="w-full text-center text-sm text-secondary-500 mt-4 underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Email */}
+                <div>
+                  <label className="input-label">Email address</label>
                 <div className="relative">
                   <FiMail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary-400 text-sm" />
                   <input
@@ -203,6 +234,7 @@ export default function Login() {
                 ) : 'Sign in'}
               </button>
             </form>
+            )}
 
             {/* Demo accounts */}
             <div className="mt-6">

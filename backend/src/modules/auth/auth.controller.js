@@ -151,8 +151,8 @@ exports.login = catchAsync(async (req, res, next) => {
 
     if (users.length > 1) {
       // User exists in multiple schools! Return the selection array.
-      return res.status(300).json({
-        success: false,
+      return res.status(200).json({
+        success: true,
         message: 'Multiple schools found. Please select your workspace.',
         action: 'SELECT_WORKSPACE',
         schools: users.map(u => ({ tenantId: u.tenant.id, name: u.tenant.name }))
