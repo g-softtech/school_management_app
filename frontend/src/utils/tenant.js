@@ -80,10 +80,7 @@ export function getCurrentTenant() {
   const envTenant = import.meta.env.VITE_DEV_TENANT;
   if (envTenant) return envTenant;
 
-  // 4. Per-developer override settable from browser console:
-  //    localStorage.setItem('__dev_tenant__', 'my-school')
-  const devOverride = localStorage.getItem('__dev_tenant__');
-  if (devOverride) return devOverride;
+
 
   // 5. Safe fallback — prevents requests going out with no tenant context
   return 'demo';
