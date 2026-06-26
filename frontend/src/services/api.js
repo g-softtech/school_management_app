@@ -27,13 +27,19 @@ api.interceptors.request.use(
     }
 
     // 2. Multi-Tenant Subdomain Injection
-    // The backend's tenantContext middleware strictly requires this header.
-    const tenantId = getCurrentTenant();
-    if (tenantId) {
-      if (config.headers.set) {
-        config.headers.set('X-Tenant-ID', tenantId);
-      } else {
-        config.headers['X-Tenant-ID'] = tenantId;
+    // Check if the route already manually provided an X-Tenant-ID (e.g. Workspace selection login)
+    const hasManualTenant = config.headers.has 
+      ? config.headers.has('X-Tenant-ID') 
+      : !!config.headers['X-Tenant-ID'];
+
+    if (!hasManualTenant) {
+      const tenantId = getCurrentTenant();
+      if (tenantId) {
+        if (config.headers.set) {
+          config.headers.set('X-Tenant-ID', tenantId);
+        } else {
+          config.headers['X-Tenant-ID'] = tenantId;
+        }
       }
     }
 
