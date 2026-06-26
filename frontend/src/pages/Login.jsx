@@ -8,6 +8,7 @@ import { getErrorMessage } from '../utils/helpers';
 import { APP_NAME, APP_TAGLINE } from '../utils/constants';
 
 const ROLE_ROUTES = {
+  SUPER_ADMIN: '/admin',
   admin:   '/admin',
   teacher: '/teacher',
   student: '/student',

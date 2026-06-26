@@ -133,7 +133,7 @@ export default function AppRoutes() {
         <Route path="/results/share/:token" element={<SharedResult />} />
 
         {/* Admin portal */}
-        <Route element={<RoleRoute allowedRoles={['admin']} />}>
+        <Route element={<RoleRoute allowedRoles={['admin', 'SUPER_ADMIN']} />}>
           <Route element={<AdminLayout />}>
             <Route path="/admin"                  element={<AdminDashboard />} />
             <Route path="/admin/students"         element={<AdminStudents />} />
@@ -225,7 +225,7 @@ export default function AppRoutes() {
       <Route path="/results/share/:token" element={<SharedResult />} />
 
       {/* ── Admin portal ─────────────────────────────────────────────────────── */}
-      <Route element={<RoleRoute allowedRoles={['admin']} />}>
+      <Route element={<RoleRoute allowedRoles={['admin', 'SUPER_ADMIN']} />}>
         <Route element={<AdminLayout />}>
           <Route path="/admin"                  element={<AdminDashboard />} />
           <Route path="/admin/students"         element={<AdminStudents />} />

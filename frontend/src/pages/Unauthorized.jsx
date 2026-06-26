@@ -3,10 +3,10 @@ import { FiShield, FiArrowLeft, FiLogOut } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 
 const ROLE_ROUTES = {
-  admin: '/admin', teacher: '/teacher', student: '/student', parent: '/parent',
+  SUPER_ADMIN: '/admin', admin: '/admin', teacher: '/teacher', student: '/student', parent: '/parent',
 };
 
-const VALID_ROLES = ['admin', 'teacher', 'student', 'parent'];
+const VALID_ROLES = ['admin', 'SUPER_ADMIN', 'teacher', 'student', 'parent'];
 
 export default function Unauthorized() {
   const navigate    = useNavigate();

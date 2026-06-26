@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
 
   // ── Rehydrate from localStorage on mount ──────────────────────────────────
   useEffect(() => {
-    const VALID_ROLES = ['admin', 'teacher', 'student', 'parent'];
+    const VALID_ROLES = ['admin', 'SUPER_ADMIN', 'teacher', 'student', 'parent'];
     const token  = localStorage.getItem('accessToken');
     const stored = localStorage.getItem('user');
     if (token && stored) {
