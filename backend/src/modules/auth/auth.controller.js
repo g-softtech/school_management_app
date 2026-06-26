@@ -39,22 +39,34 @@ async function resolveTenant(req) {
     return { id: req.tenantId };
   }
 
-  // 2. Resolve from header or subdomain (for public auth routes)
   const headerId = req.headers['x-tenant-id'];
-  let subdomain  = null;
   const host     = req.hostname || (req.headers.host || '').split(':')[0];
-  const parts    = host.split('.');
+  
+  // 2. Try Header or Subdomain (Core SaaS Matrix)
+  let subdomain = null;
+  const parts = host.split('.');
   if (parts.length >= 3 && parts[0] !== 'www') subdomain = parts[0];
 
   const identifier = headerId || subdomain;
-  if (!identifier) return null;
+  if (identifier) {
+    const tenant = await prisma.tenant.findFirst({
+      where: {
+        OR: [{ id: identifier }, { domain: identifier }],
+      },
+      select: { id: true, name: true },
+    });
+    if (tenant) return tenant;
+  }
 
-  return prisma.tenant.findFirst({
-    where: {
-      OR: [{ id: identifier }, { domain: identifier }],
-    },
-    select: { id: true, name: true },
-  });
+  // 3. Fallback: Custom Domain (White-label Route)
+  if (host) {
+    return prisma.tenant.findUnique({
+      where: { customDomain: host },
+      select: { id: true, name: true }
+    });
+  }
+
+  return null;
 }
 
 // ─── REGISTER ────────────────────────────────────────────────────────────────
